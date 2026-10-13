@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Usuário do sistema escolar (Administrador ou Professor)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador único do usuário",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome completo do usuário",
+          "maxLength": 150
+        },
+        "email": {
+          "type": "string",
+          "description": "Endereço de e-mail institucional",
+          "maxLength": 150
+        },
+        "role": {
+          "type": "string",
+          "description": "Papel de acesso: admin ou professor",
+          "enum": ["admin", "professor"]
+        },
+        "roleLabel": {
+          "type": "string",
+          "description": "Rótulo descritivo do cargo ou disciplina",
+          "maxLength": 100
+        },
+        "schoolName": {
+          "type": "string",
+          "description": "Nome da escola vinculada",
+          "maxLength": 200
+        },
+        "phone": {
+          "type": "string",
+          "description": "Telefone de contato",
+          "maxLength": 30
+        },
+        "passwordHash": {
+          "type": "string",
+          "description": "Hash seguro da senha de acesso",
+          "maxLength": 256
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Data de criação do usuário",
+          "maxLength": 50
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "Data do último login",
+          "maxLength": 50
+        },
+        "assignedClassIds": {
+          "type": "array",
+          "description": "IDs das turmas que o professor tem permissão de acessar",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["id", "name", "email", "role", "passwordHash", "createdAt"]
+    },
+    "DiarySync": {
+      "title": "DiarySync",
+      "description": "Documento de sincronização em tempo real do diário escolar para múltiplos dispositivos",
+      "type": "object",
+      "properties": {
+        "syncId": {
+          "type": "string",
+          "description": "Identificador do canal de sincronização",
+          "maxLength": 128
+        },
+        "payloadJson": {
+          "type": "string",
+          "description": "Payload JSON completo compactado contendo turmas, notas, presenças e ocorrências",
+          "maxLength": 800000
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp ISO da última modificação",
+          "maxLength": 60
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "E-mail ou nome do último usuário que editou",
+          "maxLength": 150
+        },
+        "device": {
+          "type": "string",
+          "description": "Dispositivo que originou a atualização (PC, Celular ou Tablet)",
+          "maxLength": 50
+        },
+        "version": {
+          "type": "number",
+          "description": "Número de versão sequencial para controle de concorrência"
+        }
+      },
+      "required": ["syncId", "payloadJson", "updatedAt", "version"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Registro de autorização de administrador do sistema",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Identificador do administrador",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "E-mail do administrador",
+          "maxLength": 150
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Data de inclusão do administrador",
+          "maxLength": 50
+        }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Coleção de perfis e contas dos usuários cadastrados"
+    },
+    "/diary_sync/{syncId}": {
+      "schema": "DiarySync",
+      "description": "Canal de sincronização em nuvem em tempo real para PC e Celular"
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Registro de permissões de administradores do sistema"
+    }
+  }
+}

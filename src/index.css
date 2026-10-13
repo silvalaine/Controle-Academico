@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@layer utilities {
+  /* Hide scrollbar for clean horizontal tab scrolling */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+
+  header, nav, footer, .print\:hidden, [class*="print:hidden"], [class*="print\\:hidden"] {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xs {
+    box-shadow: none !important;
+  }
+
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  @page {
+    margin: 1.2cm;
+  }
+}

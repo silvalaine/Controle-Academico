@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_@.-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role', 'passwordHash', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'role', 'roleLabel', 'schoolName', 'phone', 'passwordHash', 'createdAt', 'lastLoginAt', 'assignedClassIds']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+        data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+        (data.role == 'admin' || data.role == 'professor') &&
+        data.passwordHash is string && data.passwordHash.size() <= 256 &&
+        data.createdAt is string && data.createdAt.size() <= 50;
+    }
+
+    function isValidSync(data) {
+      return data.keys().hasAll(['syncId', 'payloadJson', 'updatedAt', 'version']) &&
+        data.keys().hasOnly(['syncId', 'payloadJson', 'updatedAt', 'updatedBy', 'device', 'version', 'email']) &&
+        data.syncId is string && data.syncId.size() <= 128 &&
+        data.payloadJson is string && data.payloadJson.size() <= 1500000 &&
+        data.updatedAt is string && data.updatedAt.size() <= 60 &&
+        data.version is number;
+    }
+
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if isValidId(userId);
+      allow create: if isValidId(userId) && isValidUser(incoming());
+      allow update: if isValidId(userId) && isValidUser(incoming());
+      allow delete: if isValidId(userId);
+    }
+
+    match /diary_sync/{syncId} {
+      allow read: if isValidId(syncId);
+      allow create: if isValidId(syncId) && isValidSync(incoming());
+      allow update: if isValidId(syncId) && isValidSync(incoming());
+      allow delete: if isValidId(syncId);
+    }
+
+    match /admins/{adminId} {
+      allow read: if isValidId(adminId);
+      allow write: if isValidId(adminId);
+    }
+  }
+}
