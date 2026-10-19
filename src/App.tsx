@@ -21,6 +21,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { SyncEmailModal } from './components/SyncEmailModal';
 import { EditClassModal } from './components/EditClassModal';
 import { GoogleDriveBackupModal } from './components/GoogleDriveBackupModal';
+import { UserRecoveryModal } from './components/UserRecoveryModal';
 import { Layers, CheckCircle2, AlertCircle, ExternalLink, ShieldAlert, HardDrive } from 'lucide-react';
 import { getCurrentUser, logoutUser } from './utils/auth';
 import {
@@ -57,6 +58,7 @@ export default function App() {
   const [syncEmail, setSyncEmailState] = useState<string>(() => getSyncEmail());
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatusInfo>(() => ({
     synced: true,
     syncing: false,
@@ -718,6 +720,8 @@ export default function App() {
           syncStatus={syncStatus}
           onOpenSyncEmailModal={() => setIsSyncModalOpen(true)}
           onManualSync={handleManualSync}
+          onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
+          onOpenRecoveryModal={() => setIsRecoveryModalOpen(true)}
         />
         <SyncEmailModal
           isOpen={isSyncModalOpen}
@@ -727,9 +731,57 @@ export default function App() {
             setSyncEmailState(newEmail);
           }}
           onManualSync={handleManualSync}
+          onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
           lastDevice={syncStatus.lastDevice}
           lastUpdated={syncStatus.lastUpdated}
         />
+        <GoogleDriveBackupModal
+          isOpen={isGoogleDriveModalOpen}
+          onClose={() => setIsGoogleDriveModalOpen(false)}
+          data={data}
+          onRestoreData={(restoredData) => {
+            setData(restoredData);
+            saveStoredData(restoredData);
+            setSyncToast({
+              message: 'Dados e cadastros restaurados com sucesso do Google Drive!',
+              type: 'success'
+            });
+            setTimeout(() => setSyncToast(null), 5000);
+          }}
+          activeEmail={syncEmail || 'lab.tecnologia.amparo@gmail.com'}
+          isQuotaExceeded={syncStatus.isQuotaExceeded || isQuotaCurrentlyBlocked()}
+        />
+        <UserRecoveryModal
+          isOpen={isRecoveryModalOpen}
+          onClose={() => setIsRecoveryModalOpen(false)}
+          currentUser={currentUser}
+          onDataChanged={(newData) => {
+            setData(newData);
+            saveStoredData(newData);
+          }}
+          onOpenGoogleDriveModal={() => {
+            setIsRecoveryModalOpen(false);
+            setIsGoogleDriveModalOpen(true);
+          }}
+        />
+        {syncToast && (
+          <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 duration-300">
+            <div
+              className={`p-4 rounded-2xl shadow-xl flex items-center gap-3 border ${
+                syncToast.type === 'success'
+                  ? 'bg-emerald-900/90 text-white border-emerald-500'
+                  : 'bg-rose-900/90 text-white border-rose-500'
+              }`}
+            >
+              {syncToast.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-rose-400" />
+              )}
+              <span className="text-xs font-semibold">{syncToast.message}</span>
+            </div>
+          </div>
+        )}
       </>
     );
   }
@@ -763,6 +815,7 @@ export default function App() {
         syncEmail={syncEmail}
         onOpenSyncEmailModal={() => setIsSyncModalOpen(true)}
         onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
+        onOpenRecoveryModal={() => setIsRecoveryModalOpen(true)}
         onShowQuotaAlert={() => setIsQuotaAlertDismissed(false)}
       />
 
@@ -1096,6 +1149,21 @@ export default function App() {
         }}
         activeEmail={syncEmail || currentUser?.email || 'lab.tecnologia.amparo@gmail.com'}
         isQuotaExceeded={syncStatus.isQuotaExceeded || isQuotaCurrentlyBlocked()}
+      />
+
+      {/* User & Student Recovery Central Modal */}
+      <UserRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        currentUser={currentUser}
+        onDataChanged={(newData) => {
+          setData(newData);
+          saveStoredData(newData);
+        }}
+        onOpenGoogleDriveModal={() => {
+          setIsRecoveryModalOpen(false);
+          setIsGoogleDriveModalOpen(true);
+        }}
       />
     </div>
   );

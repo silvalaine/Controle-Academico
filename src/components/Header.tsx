@@ -46,6 +46,7 @@ interface HeaderProps {
   syncEmail?: string;
   onOpenSyncEmailModal?: () => void;
   onOpenGoogleDriveModal?: () => void;
+  onOpenRecoveryModal?: () => void;
   onShowQuotaAlert?: () => void;
 }
 
@@ -70,6 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
   syncEmail,
   onOpenSyncEmailModal,
   onOpenGoogleDriveModal,
+  onOpenRecoveryModal,
   onShowQuotaAlert
 }) => {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -219,6 +221,20 @@ export const Header: React.FC<HeaderProps> = ({
                 </svg>
                 <span className="hidden sm:inline">Google Drive</span>
                 <span className="sm:hidden">Drive</span>
+              </button>
+            )}
+
+            {/* User & Student Recovery Central Button */}
+            {onOpenRecoveryModal && (
+              <button
+                type="button"
+                onClick={onOpenRecoveryModal}
+                title="Central de recuperação de cadastros perdidos e histórico"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-600/70 text-indigo-300 font-semibold transition cursor-pointer shadow-2xs hover:border-indigo-500"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="hidden sm:inline">Recuperar</span>
+                <span className="sm:hidden">Restaurar</span>
               </button>
             )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   Lock,
@@ -15,10 +15,17 @@ import {
   HelpCircle,
   UserCheck,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  HardDrive,
+  RotateCcw,
+  AlertTriangle,
+  Settings,
+  Database,
+  Download
 } from 'lucide-react';
 import { User } from '../types';
-import { loginUser, resetUserPassword } from '../utils/auth';
+import { loginUser, resetUserPassword, getRegisteredUsers } from '../utils/auth';
+import { isQuotaCurrentlyBlocked } from '../utils/cloudSync';
 import { SyncStatusInfo } from './Header';
 
 interface AuthScreenProps {
@@ -26,7 +33,9 @@ interface AuthScreenProps {
   syncEmail?: string;
   syncStatus?: SyncStatusInfo;
   onOpenSyncEmailModal?: () => void;
-  onManualSync?: () => void;
+  onManualSync?: () => Promise<any> | void;
+  onOpenGoogleDriveModal?: () => void;
+  onOpenRecoveryModal?: () => void;
 }
 
 type AuthMode = 'login' | 'forgot';
@@ -36,9 +45,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   syncEmail,
   syncStatus,
   onOpenSyncEmailModal,
-  onManualSync
+  onManualSync,
+  onOpenGoogleDriveModal,
+  onOpenRecoveryModal
 }) => {
   const [mode, setMode] = useState<AuthMode>('login');
+
+  // Registered users state for quick login selection
+  const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => getRegisteredUsers());
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('professor@escola.com');
@@ -56,6 +70,58 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Cloud sync feedback state
+  const [isLocalSyncing, setIsLocalSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
+
+  // Reload registered users on mount
+  useEffect(() => {
+    setRegisteredUsers(getRegisteredUsers());
+  }, []);
+
+  const isQuotaBlocked = !!syncStatus?.isQuotaExceeded || isQuotaCurrentlyBlocked();
+
+  // Handler: Manual Sync from login screen
+  const handleSyncClick = async () => {
+    if (!onManualSync) return;
+    setIsLocalSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res: any = await onManualSync();
+      const updated = getRegisteredUsers();
+      setRegisteredUsers(updated);
+      if (res?.isQuotaExceeded) {
+        setSyncFeedback({
+          type: 'warning',
+          text: 'Limite gratuito diário do Firestore atingido. Seus dados estão salvos localmente e você pode usar o Google Drive.'
+        });
+      } else if (res?.success) {
+        setSyncFeedback({
+          type: 'success',
+          text: `Sincronização concluída! ${updated.length} usuários disponíveis no sistema.`
+        });
+      } else {
+        setSyncFeedback({
+          type: 'info',
+          text: res?.message || 'Sincronização concluída com a nuvem.'
+        });
+      }
+    } catch (err: any) {
+      setSyncFeedback({
+        type: 'error',
+        text: 'Não foi possível sincronizar no momento. Verifique sua conexão com a internet.'
+      });
+    } finally {
+      setIsLocalSyncing(false);
+      setTimeout(() => {
+        setSyncFeedback(null);
+      }, 7000);
+    }
+  };
 
   // Handle Login Submit
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -172,54 +238,127 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </p>
         </div>
 
-        {/* Cloud Sync Status & Configuration Widget */}
-        <div className="mb-4 bg-slate-800/90 backdrop-blur-md rounded-2xl border border-slate-700/80 p-3 shadow-xl flex items-center justify-between gap-3 text-white">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative flex h-2.5 w-2.5 shrink-0">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  syncStatus?.syncing ? 'bg-amber-400' : 'bg-emerald-400'
-                }`}
-              ></span>
-              <span
-                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                  syncStatus?.syncing ? 'bg-amber-500' : 'bg-emerald-500'
-                }`}
-              ></span>
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-white leading-tight">
-                <Cloud className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span>Nuvem em Tempo Real</span>
-                <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                  PC & Celular
-                </span>
+        {/* Quota Exceeded Alert Banner */}
+        {isQuotaBlocked && (
+          <div className="mb-4 bg-amber-950/90 border border-amber-500/40 rounded-2xl p-3.5 text-amber-200 text-xs shadow-xl animate-in fade-in">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1.5 flex-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <strong className="font-bold text-amber-300">
+                    Aviso: Cota diária do Firestore atingida
+                  </strong>
+                  <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    Limite Diário Gratuito
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  O limite diário de operações gratuitas no Firestore foi atingido temporariamente. Seus dados e cadastros continuam <strong>100% seguros</strong> neste dispositivo. Para sincronizar dados entre aparelhos hoje, utilize o backup direto pelo <strong>Google Drive</strong>!
+                </p>
+                <div className="pt-1 flex flex-wrap gap-2">
+                  {onOpenGoogleDriveModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenGoogleDriveModal}
+                      className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+                    >
+                      <HardDrive className="w-3.5 h-3.5" />
+                      <span>Backup & Restaurar no Google Drive</span>
+                    </button>
+                  )}
+                  {onOpenRecoveryModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenRecoveryModal}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/30 font-bold rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer transition"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Recuperar Cadastros</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="text-[11px] text-slate-300 font-mono truncate mt-0.5">
-                Canal: <strong className="text-emerald-300">{syncEmail || 'lab.tecnologia.amparo@gmail.com'}</strong>
-              </p>
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-1.5 shrink-0">
+        {/* Cloud Sync Status & Configuration Widget */}
+        <div className="mb-4 bg-slate-800/95 backdrop-blur-md rounded-2xl border border-slate-700 p-3 shadow-xl text-white">
+          <div className="flex items-center justify-between gap-3 mb-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative flex h-2.5 w-2.5 shrink-0">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    isLocalSyncing || syncStatus?.syncing ? 'bg-amber-400' : isQuotaBlocked ? 'bg-amber-400' : 'bg-emerald-400'
+                  }`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                    isLocalSyncing || syncStatus?.syncing ? 'bg-amber-500' : isQuotaBlocked ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                ></span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-white leading-tight">
+                  <Cloud className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span>Sincronização em Nuvem</span>
+                  <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                    PC & Celular
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 font-mono truncate mt-0.5">
+                  Canal: <strong className="text-emerald-300">{syncEmail || 'lab.tecnologia.amparo@gmail.com'}</strong>
+                </p>
+              </div>
+            </div>
+
             {onOpenSyncEmailModal && (
               <button
                 type="button"
                 onClick={onOpenSyncEmailModal}
-                className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1"
-                title="Configurar ou alterar e-mail de sincronização em nuvem"
+                className="p-1.5 bg-slate-700/80 hover:bg-slate-600 text-slate-300 hover:text-white rounded-xl transition cursor-pointer text-xs flex items-center gap-1 shrink-0"
+                title="Configurar ou alterar e-mail de canal"
               >
-                <span>Sincronizar</span>
+                <Settings className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-medium hidden sm:inline">Canal</span>
               </button>
             )}
-            {onManualSync && (
+          </div>
+
+          {/* Quick Action Buttons on login screen */}
+          <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-700/70">
+            <button
+              type="button"
+              disabled={isLocalSyncing || syncStatus?.syncing}
+              onClick={handleSyncClick}
+              className="py-1.5 px-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1 text-center"
+              title="Sincronizar e puxar dados e usuários da nuvem agora"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLocalSyncing || syncStatus?.syncing ? 'animate-spin text-amber-300' : ''}`} />
+              <span>{isLocalSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+            </button>
+
+            {onOpenGoogleDriveModal && (
               <button
                 type="button"
-                onClick={onManualSync}
-                className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl transition cursor-pointer"
-                title="Atualizar dados da nuvem agora"
+                onClick={onOpenGoogleDriveModal}
+                className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1 text-center"
+                title="Realizar backup ou importar dados direto do Google Drive"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncStatus?.syncing ? 'animate-spin text-amber-300' : ''}`} />
+                <HardDrive className="w-3.5 h-3.5" />
+                <span>Google Drive</span>
+              </button>
+            )}
+
+            {onOpenRecoveryModal && (
+              <button
+                type="button"
+                onClick={onOpenRecoveryModal}
+                className="py-1.5 px-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1 text-center"
+                title="Recuperar cadastros de usuários e professores perdidos"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Recuperar</span>
               </button>
             )}
           </div>
@@ -258,6 +397,37 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <div className="mb-5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2.5 animate-fadeIn">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="flex-1 font-medium">{successMessage}</div>
+              </div>
+            )}
+
+            {/* Cloud Sync Feedback Banner */}
+            {syncFeedback && (
+              <div
+                className={`mb-5 p-3.5 rounded-2xl text-xs flex items-start gap-2.5 animate-fadeIn ${
+                  syncFeedback.type === 'success'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : syncFeedback.type === 'warning'
+                    ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                    : syncFeedback.type === 'info'
+                    ? 'bg-blue-50 border border-blue-200 text-blue-800'
+                    : 'bg-rose-50 border border-rose-200 text-rose-800'
+                }`}
+              >
+                {syncFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : syncFeedback.type === 'warning' ? (
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 font-medium">{syncFeedback.text}</div>
+                <button
+                  type="button"
+                  onClick={() => setSyncFeedback(null)}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
               </div>
             )}
 
@@ -349,14 +519,97 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <strong className="block font-bold">Cadastro restrito ao Administrador</strong>
-                    O cadastro de novos usuários é realizado exclusivamente pelo Administrador escolar no painel interno.
+                    O cadastro de novos usuários é realizado pelo Administrador escolar.
                   </div>
                 </div>
+
+                {/* Data Synchronization & Recovery Central Card */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                      <Cloud className="w-4 h-4 text-indigo-600" />
+                      <span>Sincronização & Recuperação de Dados</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">PC & Celular</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-tight">
+                    Perdeu algum cadastro de usuário ou deseja carregar os dados de outro dispositivo?
+                  </p>
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      disabled={isLocalSyncing}
+                      onClick={handleSyncClick}
+                      className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-[10px] rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                      title="Sincronizar dados e usuários da nuvem"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isLocalSyncing ? 'animate-spin text-indigo-600' : ''}`} />
+                      <span>Nuvem</span>
+                    </button>
+
+                    {onOpenRecoveryModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenRecoveryModal}
+                        className="py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-[10px] rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                        title="Abrir Central de Recuperação de Usuários e Snapshots"
+                      >
+                        <RotateCcw className="w-3 h-3 text-indigo-600" />
+                        <span>Recuperar</span>
+                      </button>
+                    )}
+
+                    {onOpenGoogleDriveModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenGoogleDriveModal}
+                        className="py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[10px] rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                        title="Fazer backup ou importar dados direto do Google Drive"
+                      >
+                        <HardDrive className="w-3 h-3 text-emerald-600" />
+                        <span>Drive</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Registered Users Chips (Click to fill) */}
+                {registeredUsers.length > 0 && (
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold">
+                      <span>Contas Detectadas ({registeredUsers.length}):</span>
+                      <span className="text-[10px] text-slate-400 font-normal">clique para preencher</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                      {registeredUsers.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => {
+                            setLoginEmail(u.email);
+                            if (u.email === 'admin@escola.com') setLoginPassword('admin123');
+                            else if (u.email === 'professor@escola.com') setLoginPassword('123456');
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition cursor-pointer flex items-center gap-1 truncate max-w-full ${
+                            loginEmail === u.email
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                          }`}
+                          title={`Clique para selecionar ${u.name} (${u.email})`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-indigo-400' : 'bg-emerald-400'}`}></span>
+                          <span className="truncate">{u.name}</span>
+                          <span className="text-[9px] opacity-75 font-mono">({u.role === 'admin' ? 'Adm' : 'Prof'})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Quick Demo Access Buttons for Test */}
                 <div className="pt-2 border-t border-slate-100 space-y-2">
                   <span className="text-[11px] text-slate-400 font-bold block text-center uppercase tracking-wider">
-                    Acessos de Demonstração
+                    Acessos Rápidos de Teste
                   </span>
 
                   <div className="grid grid-cols-2 gap-2">

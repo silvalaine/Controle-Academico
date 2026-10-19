@@ -161,7 +161,7 @@ export async function listGoogleDriveBackups(preferredEmail?: string): Promise<D
 export async function downloadBackupFromGoogleDrive(
   fileId: string,
   preferredEmail?: string
-): Promise<{ data: AppDataState; metadata: { name?: string; exportedAt?: string } }> {
+): Promise<{ data: AppDataState; metadata: { name?: string; exportedAt?: string; restoredUsersCount?: number } }> {
   const token = await requestDriveAccessToken(preferredEmail);
 
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
