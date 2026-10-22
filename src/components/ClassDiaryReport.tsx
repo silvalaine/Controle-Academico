@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Printer,
   FileDown,
@@ -19,6 +19,13 @@ import {
 } from '../types';
 import { getTermLabel, getTermCount } from '../utils/calculations';
 import { generateClassDiaryAttendanceAndLessonsPDF } from '../utils/pdfGenerator';
+import { SchoolLogoSelector } from './SchoolLogoSelector';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference,
+  subscribeSchoolConfig
+} from '../utils/schoolLogo';
 
 interface ClassDiaryReportProps {
   currentClass: ClassRoom;
@@ -45,12 +52,20 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
   const [showSignatures, setShowSignatures] = useState<boolean>(true);
 
   const [schoolName, setSchoolName] = useState<string>(() => {
-    try {
-      return localStorage.getItem('diario_school_name') || 'Escola Municipal de Ensino';
-    } catch (_) {
-      return 'Escola Municipal de Ensino';
-    }
+    return getSchoolName();
   });
+
+  const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
+  const [schoolLogo, setSchoolLogoState] = useState<string | null>(() => getSchoolLogo());
+
+  useEffect(() => {
+    const unsub = subscribeSchoolConfig(() => {
+      setIncludeLogo(getIncludeSchoolLogoPreference());
+      setSchoolLogoState(getSchoolLogo());
+      setSchoolName(getSchoolName());
+    });
+    return unsub;
+  }, []);
 
   const [teacherName, setTeacherName] = useState<string>(
     initialTeacherName || 'Professor(a) Responsável'
@@ -153,6 +168,8 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
       lessons,
       {
         schoolName: schoolName.trim() || undefined,
+        schoolLogo: includeLogo ? schoolLogo : null,
+        includeLogo,
         selectedTerm,
         teacherName: teacherName.trim() || undefined
       }
@@ -311,32 +328,52 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
             <span className="font-medium">3. Campos para Assinatura do Professor e Visto</span>
           </label>
         </div>
+
+        {/* School Logo Selector Card */}
+        <SchoolLogoSelector
+          includeLogo={includeLogo}
+          onToggleIncludeLogo={setIncludeLogo}
+          currentLogo={schoolLogo}
+          onLogoChange={setSchoolLogoState}
+          schoolName={schoolName}
+          onSchoolNameChange={handleSchoolNameChange}
+          showSchoolNameInput={false}
+        />
       </div>
 
       {/* Official Printable Sheet View (Clean white institutional design, NO black background) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 print:p-0 print:border-none print:shadow-none space-y-6">
         {/* Printable Official Header */}
         <div className="border-b-2 border-slate-300 pb-4">
-          <div className="flex justify-between items-start">
-            <div>
-              {schoolName.trim() && (
-                <div className="text-xs font-bold text-slate-600 tracking-wider uppercase mb-1">
-                  {schoolName.trim()}
-                </div>
+          <div className="flex justify-between items-start gap-4">
+            <div className="flex items-start gap-3.5">
+              {includeLogo && schoolLogo && (
+                <img
+                  src={schoolLogo}
+                  alt="Brasão da Escola"
+                  className="w-14 h-14 object-contain rounded bg-white p-0.5 border border-slate-200 shrink-0 print:block"
+                />
               )}
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight uppercase">
-                DIÁRIO DE CLASSE OFICIAL — CHAMADA & CONTEÚDOS MINISTRADOS
-              </h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-700 font-medium">
-                <span><strong>Turma:</strong> {currentClass.name}</span>
-                <span>•</span>
-                <span><strong>Disciplina:</strong> {currentClass.subject}</span>
-                <span>•</span>
-                <span><strong>Turno:</strong> {currentClass.shift}</span>
-                <span>•</span>
-                <span><strong>Período:</strong> {termLabel}</span>
-                <span>•</span>
-                <span><strong>Professor(a):</strong> {teacherName}</span>
+              <div>
+                {schoolName.trim() && (
+                  <div className="text-xs font-bold text-slate-600 tracking-wider uppercase mb-1">
+                    {schoolName.trim()}
+                  </div>
+                )}
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight uppercase">
+                  DIÁRIO DE CLASSE OFICIAL — CHAMADA & CONTEÚDOS MINISTRADOS
+                </h1>
+                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-700 font-medium">
+                  <span><strong>Turma:</strong> {currentClass.name}</span>
+                  <span>•</span>
+                  <span><strong>Disciplina:</strong> {currentClass.subject}</span>
+                  <span>•</span>
+                  <span><strong>Turno:</strong> {currentClass.shift}</span>
+                  <span>•</span>
+                  <span><strong>Período:</strong> {termLabel}</span>
+                  <span>•</span>
+                  <span><strong>Professor(a):</strong> {teacherName}</span>
+                </div>
               </div>
             </div>
             <div className="text-right text-xs text-slate-500 shrink-0">

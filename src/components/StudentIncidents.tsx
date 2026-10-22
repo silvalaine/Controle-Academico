@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   AlertTriangle,
   Plus,
@@ -31,6 +31,13 @@ import {
 } from '../types';
 import { generateIncidentsPDF } from '../utils/pdfGenerator';
 import { ConfirmModal } from './ConfirmModal';
+import { SchoolLogoSelector } from './SchoolLogoSelector';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference,
+  subscribeSchoolConfig
+} from '../utils/schoolLogo';
 
 interface StudentIncidentsProps {
   currentClass: ClassRoom;
@@ -259,8 +266,25 @@ export const StudentIncidents: React.FC<StudentIncidentsProps> = ({
     setQuickAddTypeMode(false);
   };
 
+  const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
+  const [schoolLogo, setSchoolLogoState] = useState<string | null>(() => getSchoolLogo());
+  const [schoolName, setSchoolName] = useState<string>(() => getSchoolName());
+
+  useEffect(() => {
+    const unsub = subscribeSchoolConfig(() => {
+      setIncludeLogo(getIncludeSchoolLogoPreference());
+      setSchoolLogoState(getSchoolLogo());
+      setSchoolName(getSchoolName());
+    });
+    return unsub;
+  }, []);
+
   const handleExportPDF = () => {
-    generateIncidentsPDF(currentClass, students, incidents, selectedDate || undefined, incidentTypes);
+    generateIncidentsPDF(currentClass, students, incidents, selectedDate || undefined, incidentTypes, {
+      schoolName: schoolName.trim() || undefined,
+      schoolLogo: includeLogo ? schoolLogo : null,
+      includeLogo
+    });
   };
 
   const formatDateHeader = (dStr: string) => {
@@ -309,12 +333,23 @@ export const StudentIncidents: React.FC<StudentIncidentsProps> = ({
             <span>{isAdmin ? `Gerenciar Tipos (${incidentTypes.length})` : `Tipos de Ocorrência (${incidentTypes.length})`}</span>
           </button>
 
+          {/* School Logo Selector Option */}
+          <SchoolLogoSelector
+            compact
+            includeLogo={includeLogo}
+            onToggleIncludeLogo={setIncludeLogo}
+            currentLogo={schoolLogo}
+            onLogoChange={setSchoolLogoState}
+            schoolName={schoolName}
+            onSchoolNameChange={setSchoolName}
+          />
+
           {/* Export PDF Button */}
           <button
             type="button"
             onClick={handleExportPDF}
             title="Exportar Relatório Oficial de Ocorrências em PDF"
-            className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
           >
             <FileDown className="w-4 h-4 text-rose-600" />
             <span>Baixar PDF</span>

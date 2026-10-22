@@ -26,6 +26,13 @@ import {
 } from '../types';
 import { generateStudentListPDF } from '../utils/pdfGenerator';
 import { calculateStudentAttendance, calculateStudentOverallAverage } from '../utils/calculations';
+import { SchoolLogoSelector } from './SchoolLogoSelector';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference,
+  subscribeSchoolConfig
+} from '../utils/schoolLogo';
 
 interface StudentListGeneratorProps {
   currentClass: ClassRoom;
@@ -75,12 +82,20 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
   const [stdStatus, setStdStatus] = useState<StudentStatus>('active');
 
   const [schoolName, setSchoolName] = useState<string>(() => {
-    try {
-      return localStorage.getItem('diario_school_name') || 'Escola Municipal de Ensino';
-    } catch (_) {
-      return 'Escola Municipal de Ensino';
-    }
+    return getSchoolName();
   });
+
+  const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
+  const [schoolLogo, setSchoolLogoState] = useState<string | null>(() => getSchoolLogo());
+
+  React.useEffect(() => {
+    const unsub = subscribeSchoolConfig(() => {
+      setIncludeLogo(getIncludeSchoolLogoPreference());
+      setSchoolLogoState(getSchoolLogo());
+      setSchoolName(getSchoolName());
+    });
+    return unsub;
+  }, []);
 
   const handleSchoolNameChange = (val: string) => {
     setSchoolName(val);
@@ -126,6 +141,8 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
   const handleExportPDF = () => {
     generateStudentListPDF(currentClass, classStudents, templateMode, {
       schoolName: schoolName.trim() || undefined,
+      schoolLogo: includeLogo ? schoolLogo : null,
+      includeLogo,
       customTitle: customTitle.trim() || undefined,
       blankColumnsCount,
       showSignatures,
@@ -661,30 +678,50 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
             <span className="font-medium">Exibir campo para assinatura do professor e visto da coordenação</span>
           </label>
         </div>
+
+        {/* School Logo Selector Card */}
+        <SchoolLogoSelector
+          includeLogo={includeLogo}
+          onToggleIncludeLogo={setIncludeLogo}
+          currentLogo={schoolLogo}
+          onLogoChange={setSchoolLogoState}
+          schoolName={schoolName}
+          onSchoolNameChange={handleSchoolNameChange}
+          showSchoolNameInput={false}
+        />
       </div>
 
       {/* Printable Sheet View */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 print:p-0 print:border-none print:shadow-none">
         {/* Printable Official Header (No black background, clean institutional typography) */}
         <div className="border-b-2 border-slate-300 pb-4 mb-4">
-          <div className="flex justify-between items-start">
-            <div>
-              {schoolName.trim() && (
-                <div className="text-xs font-bold text-slate-600 tracking-wider uppercase mb-1">
-                  {schoolName.trim()}
-                </div>
+          <div className="flex justify-between items-start gap-4">
+            <div className="flex items-start gap-3.5">
+              {includeLogo && schoolLogo && (
+                <img
+                  src={schoolLogo}
+                  alt="Brasão da Escola"
+                  className="w-14 h-14 object-contain rounded bg-white p-0.5 border border-slate-200 shrink-0 print:block"
+                />
               )}
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight uppercase">
-                {effectiveTitle}
-              </h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-700 font-medium">
-                <span><strong>Turma:</strong> {currentClass.name}</span>
-                <span>•</span>
-                <span><strong>Disciplina:</strong> {currentClass.subject}</span>
-                <span>•</span>
-                <span><strong>Turno:</strong> {currentClass.shift}</span>
-                <span>•</span>
-                <span><strong>Segmento:</strong> {currentClass.gradeLevel}</span>
+              <div>
+                {schoolName.trim() && (
+                  <div className="text-xs font-bold text-slate-600 tracking-wider uppercase mb-1">
+                    {schoolName.trim()}
+                  </div>
+                )}
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight uppercase">
+                  {effectiveTitle}
+                </h1>
+                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-700 font-medium">
+                  <span><strong>Turma:</strong> {currentClass.name}</span>
+                  <span>•</span>
+                  <span><strong>Disciplina:</strong> {currentClass.subject}</span>
+                  <span>•</span>
+                  <span><strong>Turno:</strong> {currentClass.shift}</span>
+                  <span>•</span>
+                  <span><strong>Segmento:</strong> {currentClass.gradeLevel}</span>
+                </div>
               </div>
             </div>
             <div className="text-right text-xs text-slate-500 shrink-0">

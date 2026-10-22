@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Layers,
@@ -14,13 +14,21 @@ import {
   Printer,
   ShieldCheck,
   ShieldAlert,
-  Lock
+  Lock,
+  Image as ImageIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { AcademicYear, ClassRoom, Student, StudentStatus, TermType, AnnualRecoveryFormula, User } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { generateStudentListPDF } from '../utils/pdfGenerator';
 import { UserManagement } from './UserManagement';
+import { SchoolLogoSelector } from './SchoolLogoSelector';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference,
+  subscribeSchoolConfig
+} from '../utils/schoolLogo';
 
 interface ManagementProps {
   academicYears: AcademicYear[];
@@ -39,7 +47,7 @@ interface ManagementProps {
   onDeleteStudent: (studentId: string) => void;
   onImportStudentsBatch?: (newStudents: Omit<Student, 'id'>[], replaceExisting: boolean) => void;
   currentUser?: User;
-  initialSection?: 'students' | 'classes' | 'years' | 'users';
+  initialSection?: 'students' | 'classes' | 'years' | 'users' | 'school';
 }
 
 export const ManagementModal: React.FC<ManagementProps> = ({
@@ -62,7 +70,21 @@ export const ManagementModal: React.FC<ManagementProps> = ({
   initialSection = 'students'
 }) => {
   const isAdmin = currentUser?.role === 'admin';
-  const [activeSection, setActiveSection] = useState<'students' | 'classes' | 'years' | 'users'>(initialSection);
+  const [activeSection, setActiveSection] = useState<'students' | 'classes' | 'years' | 'users' | 'school'>(initialSection);
+
+  // School Identity & Logo Configuration State
+  const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
+  const [schoolLogo, setSchoolLogoState] = useState<string | null>(() => getSchoolLogo());
+  const [schoolName, setSchoolNameState] = useState<string>(() => getSchoolName());
+
+  useEffect(() => {
+    const unsub = subscribeSchoolConfig(() => {
+      setIncludeLogo(getIncludeSchoolLogoPreference());
+      setSchoolLogoState(getSchoolLogo());
+      setSchoolNameState(getSchoolName());
+    });
+    return unsub;
+  }, []);
 
   // Deletion modals state
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
@@ -452,6 +474,18 @@ export const ManagementModal: React.FC<ManagementProps> = ({
               <span>Usuários & Professores</span>
             </button>
           )}
+
+          <button
+            onClick={() => setActiveSection('school')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+              activeSection === 'school'
+                ? 'bg-white text-indigo-700 shadow-xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Identidade & Logo da Escola</span>
+          </button>
         </div>
       </div>
 
@@ -1324,6 +1358,33 @@ export const ManagementModal: React.FC<ManagementProps> = ({
       {/* SECTION 4: USERS & PROFESSORS (ADMIN ONLY) */}
       {activeSection === 'users' && isAdmin && currentUser && (
         <UserManagement currentUser={currentUser} classes={classes} />
+      )}
+
+      {/* SECTION 5: SCHOOL IDENTITY & LOGO */}
+      {activeSection === 'school' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
+            <div className="max-w-3xl">
+              <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-indigo-600" />
+                Identidade Visual e Logo da Escola
+              </h3>
+              <p className="text-xs text-slate-500 mb-6">
+                Configure aqui o logotipo e o nome oficial da escola. As alterações salvas serão aplicadas automaticamente em todos os relatórios, diários de classe, boletins individuais, listas de chamada e mapas de notas emitidos pelo sistema.
+              </p>
+
+              <SchoolLogoSelector
+                includeLogo={includeLogo}
+                onToggleIncludeLogo={setIncludeLogo}
+                currentLogo={schoolLogo}
+                onLogoChange={setSchoolLogoState}
+                schoolName={schoolName}
+                onSchoolNameChange={setSchoolNameState}
+                showSchoolNameInput={true}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirmation Modals for Management Deletions */}

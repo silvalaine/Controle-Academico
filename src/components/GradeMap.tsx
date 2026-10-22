@@ -30,6 +30,13 @@ import {
 } from '../utils/calculations';
 import { generateGradeMapPDF } from '../utils/pdfGenerator';
 import { ConfirmModal } from './ConfirmModal';
+import { SchoolLogoSelector } from './SchoolLogoSelector';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference,
+  subscribeSchoolConfig
+} from '../utils/schoolLogo';
 
 interface GradeMapProps {
   currentClass: ClassRoom;
@@ -150,6 +157,19 @@ export const GradeMap: React.FC<GradeMapProps> = ({
     setIsAddingAssessment(false);
   };
 
+  const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
+  const [schoolLogo, setSchoolLogoState] = useState<string | null>(() => getSchoolLogo());
+  const [schoolName, setSchoolName] = useState<string>(() => getSchoolName());
+
+  React.useEffect(() => {
+    const unsub = subscribeSchoolConfig(() => {
+      setIncludeLogo(getIncludeSchoolLogoPreference());
+      setSchoolLogoState(getSchoolLogo());
+      setSchoolName(getSchoolName());
+    });
+    return unsub;
+  }, []);
+
   // Export PDF
   const handleExportPDF = () => {
     generateGradeMapPDF(
@@ -160,7 +180,12 @@ export const GradeMap: React.FC<GradeMapProps> = ({
       selectedTerm,
       viewMode,
       termRecoveries,
-      finalRecoveries
+      finalRecoveries,
+      {
+        schoolName: schoolName.trim() || undefined,
+        schoolLogo: includeLogo ? schoolLogo : null,
+        includeLogo
+      }
     );
   };
 
@@ -294,11 +319,22 @@ export const GradeMap: React.FC<GradeMapProps> = ({
             </button>
           )}
 
+          {/* School Logo Selector Option */}
+          <SchoolLogoSelector
+            compact
+            includeLogo={includeLogo}
+            onToggleIncludeLogo={setIncludeLogo}
+            currentLogo={schoolLogo}
+            onLogoChange={setSchoolLogoState}
+            schoolName={schoolName}
+            onSchoolNameChange={setSchoolName}
+          />
+
           {/* Export PDF Button */}
           <button
             onClick={handleExportPDF}
             title="Exportar mapa de notas oficial em PDF"
-            className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
           >
             <FileText className="w-4 h-4 text-rose-600" />
             <span>Gerar PDF</span>

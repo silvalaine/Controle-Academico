@@ -20,6 +20,47 @@ import {
   getTermLabel,
   getTermCount
 } from './calculations';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference
+} from './schoolLogo';
+
+/**
+ * Helper to safely draw a school logo in a jsPDF document.
+ * Scales the image proportionally within maxW x maxH.
+ * Returns the drawn width and height in mm.
+ */
+function drawSchoolLogoInPDF(
+  doc: jsPDF,
+  logoDataUrl: string,
+  x: number,
+  y: number,
+  maxW = 16,
+  maxH = 16
+): { width: number; height: number } {
+  try {
+    const props = doc.getImageProperties(logoDataUrl);
+    const aspect = props.width && props.height ? props.width / props.height : 1;
+    let w = maxW;
+    let h = w / aspect;
+    if (h > maxH) {
+      h = maxH;
+      w = h * aspect;
+    }
+    const format = props.fileType || (logoDataUrl.includes('png') ? 'PNG' : 'JPEG');
+    doc.addImage(logoDataUrl, format, x, y, w, h, undefined, 'FAST');
+    return { width: w, height: h };
+  } catch (err) {
+    try {
+      doc.addImage(logoDataUrl, 'PNG', x, y, maxW, maxH, undefined, 'FAST');
+      return { width: maxW, height: maxH };
+    } catch (e) {
+      console.warn('Erro ao inserir logo no PDF:', e);
+      return { width: 0, height: 0 };
+    }
+  }
+}
 
 /**
  * Generates and downloads a Grade Map PDF (Mapa de Notas da Turma)
@@ -33,7 +74,12 @@ export function generateGradeMapPDF(
   selectedTerm: number,
   viewMode: 'term' | 'annual' = 'term',
   termRecoveries: TermRecoveryRecord[] = [],
-  finalRecoveries: FinalRecoveryRecord[] = []
+  finalRecoveries: FinalRecoveryRecord[] = [],
+  options?: {
+    schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
+  }
 ): void {
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -51,22 +97,45 @@ export function generateGradeMapPDF(
 
   const numTerms = getTermCount(currentClass.termType);
 
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
   // Document Title & Header
   doc.setFillColor(30, 41, 59); // Slate-800
-  doc.rect(0, 0, 297, 24, 'F');
+  doc.rect(0, 0, 297, 26, 'F');
+
+  let textX = 14;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 4, 18, 18);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+    }
+  }
+
+  let textY = 8.5;
+  if (activeSchoolName) {
+    doc.setTextColor(251, 191, 36); // Amber-400
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(activeSchoolName.toUpperCase(), textX, textY);
+    textY += 5;
+  }
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  doc.setFontSize(12.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('DIÁRIO DO PROFESSOR - MAPA DE NOTAS DA TURMA', 14, 11);
+  doc.text('DIÁRIO DO PROFESSOR - MAPA DE NOTAS DA TURMA', textX, textY);
 
-  doc.setFontSize(9);
+  textY += 4.5;
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(226, 232, 240);
   const termTitle = viewMode === 'term' ? getTermLabel(currentClass.termType, selectedTerm) : 'Consolidado Anual';
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | Período: ${termTitle} | Emissão: ${new Date().toLocaleDateString('pt-BR')}`,
-    14,
-    18
+    textX,
+    textY
   );
 
   let head: string[][] = [];
@@ -190,7 +259,7 @@ export function generateGradeMapPDF(
   autoTable(doc, {
     head,
     body,
-    startY: 28,
+    startY: activeLogo ? 30 : 28,
     theme: 'grid',
     styles: {
       fontSize: 8,
@@ -246,7 +315,12 @@ export function generateAttendanceReportPDF(
   currentClass: ClassRoom,
   students: Student[],
   attendances: AttendanceRecord[],
-  selectedTerm: number
+  selectedTerm: number,
+  options?: {
+    schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
+  }
 ): void {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -258,21 +332,44 @@ export function generateAttendanceReportPDF(
     .filter(s => s.classId === currentClass.id && s.status === 'active')
     .sort((a, b) => a.rollNumber - b.rollNumber);
 
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
   // Top Banner
   doc.setFillColor(30, 41, 59);
   doc.rect(0, 0, 210, 26, 'F');
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('RELATÓRIO OFICIAL DE FREQUÊNCIA E ASSIDUIDADE', 14, 12);
+  let textX = 14;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 4, 18, 18);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+    }
+  }
 
-  doc.setFontSize(9);
+  let textY = 8.5;
+  if (activeSchoolName) {
+    doc.setTextColor(251, 191, 36); // Amber-400
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(activeSchoolName.toUpperCase(), textX, textY);
+    textY += 4.5;
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RELATÓRIO OFICIAL DE FREQUÊNCIA E ASSIDUIDADE', textX, textY);
+
+  textY += 4.5;
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(226, 232, 240);
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | ${getTermLabel(currentClass.termType, selectedTerm)} | Emissão: ${new Date().toLocaleDateString('pt-BR')}`,
-    14,
-    19
+    textX,
+    textY
   );
 
   const head = [['Nº', 'Matrícula', 'Nome do Estudante', 'Aulas', 'Pres.', 'Faltas', 'Just.', 'Freq. %', 'Situação Legal']];
@@ -303,7 +400,7 @@ export function generateAttendanceReportPDF(
   autoTable(doc, {
     head,
     body,
-    startY: 30,
+    startY: activeLogo ? 32 : 30,
     theme: 'grid',
     styles: {
       fontSize: 8.5,
@@ -381,7 +478,12 @@ export function generateAttendanceReportPDF(
 export function generateLessonDiaryPDF(
   currentClass: ClassRoom,
   lessons: LessonContent[],
-  selectedTerm: number
+  selectedTerm: number,
+  options?: {
+    schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
+  }
 ): void {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -395,20 +497,43 @@ export function generateLessonDiaryPDF(
 
   const totalAulas = classLessons.reduce((acc, curr) => acc + (Number(curr.lessonCount) || 1), 0);
 
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
   doc.setFillColor(30, 41, 59);
   doc.rect(0, 0, 210, 26, 'F');
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DIÁRIO DE CLASSE - CONTEÚDOS MINISTRADOS', 14, 12);
+  let textX = 14;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 4, 18, 18);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+    }
+  }
 
-  doc.setFontSize(9);
+  let textY = 8.5;
+  if (activeSchoolName) {
+    doc.setTextColor(251, 191, 36); // Amber-400
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(activeSchoolName.toUpperCase(), textX, textY);
+    textY += 4.5;
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DIÁRIO DE CLASSE - CONTEÚDOS MINISTRADOS', textX, textY);
+
+  textY += 4.5;
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(226, 232, 240);
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | ${getTermLabel(currentClass.termType, selectedTerm)} | Total: ${totalAulas} Aulas`,
-    14,
-    19
+    textX,
+    textY
   );
 
   const head = [['Data / Aulas', 'Status', 'Tema & Conteúdo Ministrado', 'BNCC / Tarefa & Links']];
@@ -434,7 +559,7 @@ export function generateLessonDiaryPDF(
   autoTable(doc, {
     head,
     body,
-    startY: 30,
+    startY: activeLogo ? 32 : 30,
     theme: 'grid',
     styles: {
       fontSize: 8.5,
@@ -483,7 +608,12 @@ export function generateStudentBulletinPDF(
   observations: StudentObservation[],
   selectedTerm: number,
   termRecoveries: TermRecoveryRecord[] = [],
-  finalRecoveries: FinalRecoveryRecord[] = []
+  finalRecoveries: FinalRecoveryRecord[] = [],
+  options?: {
+    schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
+  }
 ): void {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -502,20 +632,43 @@ export function generateStudentBulletinPDF(
 
   const attendance = calculateStudentAttendance(student.id, currentClass.id, attendances);
 
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
   doc.setFillColor(30, 41, 59);
   doc.rect(0, 0, 210, 28, 'F');
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('BOLETIM ESCOLAR E DESEMPENHO INDIVIDUAL', 14, 13);
+  let textX = 14;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 4, 20, 20);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+    }
+  }
 
-  doc.setFontSize(9);
+  let textY = 9;
+  if (activeSchoolName) {
+    doc.setTextColor(251, 191, 36);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(activeSchoolName.toUpperCase(), textX, textY);
+    textY += 5;
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BOLETIM ESCOLAR E DESEMPENHO INDIVIDUAL', textX, textY);
+
+  textY += 5;
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(226, 232, 240);
   doc.text(
     `Registro Acadêmico Oficial | Turma: ${currentClass.name} | Disciplina: ${currentClass.subject}`,
-    14,
-    20
+    textX,
+    textY
   );
 
   doc.setFillColor(248, 250, 252);
@@ -651,6 +804,8 @@ export function generateStudentListPDF(
   mode: 'chamada' | 'assinatura' | 'cadastral' | 'desempenho' = 'chamada',
   options?: {
     schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
     customTitle?: string;
     blankColumnsCount?: number;
     showSignatures?: boolean;
@@ -670,10 +825,13 @@ export function generateStudentListPDF(
     .filter(s => s.classId === currentClass.id && (options?.onlyActive !== false ? s.status === 'active' : true))
     .sort((a, b) => a.rollNumber - b.rollNumber);
 
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
   // Clean, official printable header - NO BLACK BACKGROUND!
   doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, pageWidth, 26, 'F');
-
+  doc.rect(0, 0, pageWidth, 28, 'F');
 
   const titleText = options?.customTitle || (
     mode === 'chamada' ? 'LISTA DE CHAMADA DA TURMA (DIÁRIO DE CLASSE)' :
@@ -682,31 +840,43 @@ export function generateStudentListPDF(
     'RELAÇÃO GERAL DE ALUNOS DA TURMA'
   );
 
-  let currentHeaderY = 10;
-  if (options?.schoolName && options.schoolName.trim()) {
+  let textX = 14;
+  let logoH = 0;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 6, 17, 17);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+      logoH = logoRes.height;
+    }
+  }
+
+  let currentHeaderY = 9.5;
+  if (activeSchoolName && activeSchoolName.trim()) {
     doc.setTextColor(71, 85, 105);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
-    doc.text(options.schoolName.trim().toUpperCase(), 14, currentHeaderY);
-    currentHeaderY += 5.5;
+    doc.text(activeSchoolName.trim().toUpperCase(), textX, currentHeaderY);
+    currentHeaderY += 5;
   }
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text(titleText, 14, currentHeaderY);
+  doc.text(titleText, textX, currentHeaderY);
 
-  currentHeaderY += 5;
+  currentHeaderY += 4.5;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | Turno: ${currentClass.shift} | Total: ${filteredStudents.length} Alunos | Emissão: ${new Date().toLocaleDateString('pt-BR')}`,
-    14,
+    textX,
     currentHeaderY
   );
 
-  const actualSepY = currentHeaderY + 3.5;
+  const actualSepY = Math.max(currentHeaderY + 3.5, logoH > 0 ? 6 + logoH + 2.5 : 24);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.4);
   doc.line(14, actualSepY, pageWidth - 14, actualSepY);
 
   let head: any[][] = [];
@@ -838,6 +1008,8 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
   lessons: LessonContent[],
   options?: {
     schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
     selectedTerm?: number;
     teacherName?: string;
   }
@@ -851,6 +1023,10 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
   const pageWidth = 297;
   const term = options?.selectedTerm || 1;
   const termLabel = getTermLabel(currentClass.termType, term);
+
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
 
   // Filter lessons for this class and term (or all if term is 0)
   const classLessons = lessons
@@ -877,21 +1053,31 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, 28, 'F');
 
-  let currentY = 10;
-  if (options?.schoolName && options.schoolName.trim()) {
+  let textX = 14;
+  let logoH = 0;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 6, 17, 17);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+      logoH = logoRes.height;
+    }
+  }
+
+  let currentY = 9.5;
+  if (activeSchoolName && activeSchoolName.trim()) {
     doc.setTextColor(71, 85, 105);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
-    doc.text(options.schoolName.trim().toUpperCase(), 14, currentY);
-    currentY += 5.5;
+    doc.text(activeSchoolName.trim().toUpperCase(), textX, currentY);
+    currentY += 5;
   }
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text(`DIÁRIO DE CLASSE: FREQUÊNCIA (CHAMADA) & CONTEÚDOS MINISTRADOS — ${termLabel.toUpperCase()}`, 14, currentY);
+  doc.text(`DIÁRIO DE CLASSE: FREQUÊNCIA (CHAMADA) & CONTEÚDOS MINISTRADOS — ${termLabel.toUpperCase()}`, textX, currentY);
 
-  currentY += 5;
+  currentY += 4.5;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
@@ -905,12 +1091,12 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
 
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | Turno: ${currentClass.shift}${teacherInfo} | Aulas Dadas (Ministradas): ${totalLessonsTaught} | Aulas Planejadas: ${totalLessonsPlanned} | Emissão: ${new Date().toLocaleDateString('pt-BR')}`,
-    14,
+    textX,
     currentY
   );
 
   // Separator rule (clean light line, no black blocks)
-  const actualSepY = currentY + 3.5;
+  const actualSepY = Math.max(currentY + 3.5, logoH > 0 ? 6 + logoH + 2.5 : 24);
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.4);
   doc.line(14, actualSepY, pageWidth - 14, actualSepY);
@@ -1057,32 +1243,42 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, 28, 'F');
 
-  let page2Y = 10;
-  if (options?.schoolName && options.schoolName.trim()) {
+  let page2TextX = 14;
+  let page2LogoH = 0;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 6, 17, 17);
+    if (logoRes.width > 0) {
+      page2TextX = 14 + logoRes.width + 4;
+      page2LogoH = logoRes.height;
+    }
+  }
+
+  let page2Y = 9.5;
+  if (activeSchoolName && activeSchoolName.trim()) {
     doc.setTextColor(71, 85, 105);
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
-    doc.text(options.schoolName.trim().toUpperCase(), 14, page2Y);
-    page2Y += 5.5;
+    doc.text(activeSchoolName.trim().toUpperCase(), page2TextX, page2Y);
+    page2Y += 5;
   }
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text(`DIÁRIO DE CLASSE: CONTEÚDOS MINISTRADOS E REGISTRO DE AULAS — ${termLabel.toUpperCase()}`, 14, page2Y);
+  doc.text(`DIÁRIO DE CLASSE: CONTEÚDOS MINISTRADOS E REGISTRO DE AULAS — ${termLabel.toUpperCase()}`, page2TextX, page2Y);
 
-  page2Y += 5;
+  page2Y += 4.5;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | Turno: ${currentClass.shift}${teacherInfo} | Aulas Dadas (Ministradas): ${totalLessonsTaught} | Aulas Planejadas: ${totalLessonsPlanned} | Emissão: ${new Date().toLocaleDateString('pt-BR')}`,
-    14,
+    page2TextX,
     page2Y
   );
 
   // Separator rule for Page 2
-  const page2SepY = page2Y + 3.5;
+  const page2SepY = Math.max(page2Y + 3.5, page2LogoH > 0 ? 6 + page2LogoH + 2.5 : 24);
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.4);
   doc.line(14, page2SepY, pageWidth - 14, page2SepY);
@@ -1220,7 +1416,12 @@ export function generateIncidentsPDF(
   students: Student[],
   incidents: StudentIncident[],
   filterDate?: string,
-  incidentTypes?: IncidentTypeDefinition[]
+  incidentTypes?: IncidentTypeDefinition[],
+  options?: {
+    schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
+  }
 ): void {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -1232,21 +1433,44 @@ export function generateIncidentsPDF(
     .filter(inc => inc.classId === currentClass.id && (!filterDate || inc.date === filterDate))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
   doc.setFillColor(30, 41, 59);
   doc.rect(0, 0, 210, 26, 'F');
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LIVRO DE OCORRÊNCIAS DISCIPLINARES & PEDAGÓGICAS', 14, 12);
+  let textX = 14;
+  if (activeLogo) {
+    const logoRes = drawSchoolLogoInPDF(doc, activeLogo, 14, 4, 18, 18);
+    if (logoRes.width > 0) {
+      textX = 14 + logoRes.width + 4;
+    }
+  }
 
-  doc.setFontSize(8.5);
+  let textY = 8.5;
+  if (activeSchoolName) {
+    doc.setTextColor(251, 191, 36); // Amber-400
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(activeSchoolName.toUpperCase(), textX, textY);
+    textY += 4.5;
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LIVRO DE OCORRÊNCIAS DISCIPLINARES & PEDAGÓGICAS', textX, textY);
+
+  textY += 4.5;
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(226, 232, 240);
   const dateInfo = filterDate ? `Data: ${filterDate.split('-').reverse().join('/')}` : 'Todas as datas';
   doc.text(
     `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | ${dateInfo} | Total: ${classIncidents.length} Registros`,
-    14,
-    19
+    textX,
+    textY
   );
 
   const head = [['Data', 'Estudante', 'Tipo / Título', 'Descrição & Providências Adotadas', 'Família']];
@@ -1286,7 +1510,7 @@ export function generateIncidentsPDF(
   autoTable(doc, {
     head,
     body,
-    startY: 30,
+    startY: activeLogo ? 32 : 30,
     theme: 'grid',
     styles: {
       fontSize: 8,

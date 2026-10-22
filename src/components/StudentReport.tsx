@@ -35,6 +35,13 @@ import {
 import { generateStudentBulletinPDF } from '../utils/pdfGenerator';
 import { ClassDiaryReport } from './ClassDiaryReport';
 import { StudentListGenerator } from './StudentListGenerator';
+import { SchoolLogoSelector } from './SchoolLogoSelector';
+import {
+  getSchoolLogo,
+  getSchoolName,
+  getIncludeSchoolLogoPreference,
+  subscribeSchoolConfig
+} from '../utils/schoolLogo';
 
 interface StudentReportProps {
   currentClass: ClassRoom;
@@ -106,6 +113,19 @@ export const StudentReport: React.FC<StudentReportProps> = ({
   const isApproved = annualRes.definitiveAverage !== null && annualRes.definitiveAverage >= currentClass.passingGrade;
   const numTerms = getTermCount(currentClass.termType);
 
+  const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
+  const [schoolLogo, setSchoolLogoState] = useState<string | null>(() => getSchoolLogo());
+  const [schoolName, setSchoolName] = useState<string>(() => getSchoolName());
+
+  React.useEffect(() => {
+    const unsub = subscribeSchoolConfig(() => {
+      setIncludeLogo(getIncludeSchoolLogoPreference());
+      setSchoolLogoState(getSchoolLogo());
+      setSchoolName(getSchoolName());
+    });
+    return unsub;
+  }, []);
+
   const handlePrev = () => {
     if (currentIndex > 0) {
       onSelectStudentId(activeStudents[currentIndex - 1].id);
@@ -138,7 +158,12 @@ export const StudentReport: React.FC<StudentReportProps> = ({
       observations,
       selectedTerm,
       termRecoveries,
-      finalRecoveries
+      finalRecoveries,
+      {
+        schoolName: schoolName.trim() || undefined,
+        schoolLogo: includeLogo ? schoolLogo : null,
+        includeLogo
+      }
     );
   };
 
@@ -277,9 +302,20 @@ export const StudentReport: React.FC<StudentReportProps> = ({
             <ChevronRight className="w-4 h-4" />
           </button>
 
+          {/* School Logo Selector Option */}
+          <SchoolLogoSelector
+            compact
+            includeLogo={includeLogo}
+            onToggleIncludeLogo={setIncludeLogo}
+            currentLogo={schoolLogo}
+            onLogoChange={setSchoolLogoState}
+            schoolName={schoolName}
+            onSchoolNameChange={setSchoolName}
+          />
+
           <button
             onClick={handleDownloadPDF}
-            className="ml-3 flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
+            className="ml-2 flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
             title="Baixar arquivo PDF timbrado para salvar no computador, enviar por e-mail ou WhatsApp"
           >
             <FileText className="w-3.5 h-3.5 text-rose-600" />
@@ -301,11 +337,24 @@ export const StudentReport: React.FC<StudentReportProps> = ({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 print:p-0 print:border-none print:shadow-none space-y-6">
         {/* Official Header */}
         <div className="border-b-2 border-slate-900 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-indigo-900 text-white flex items-center justify-center font-bold print:border print:border-slate-800">
-              <GraduationCap className="w-7 h-7" />
-            </div>
+          <div className="flex items-center gap-3.5">
+            {includeLogo && schoolLogo ? (
+              <img
+                src={schoolLogo}
+                alt="Brasão da Escola"
+                className="w-14 h-14 object-contain rounded bg-white p-1 border border-slate-200 shrink-0 print:block"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-indigo-900 text-white flex items-center justify-center font-bold print:border print:border-slate-800 shrink-0">
+                <GraduationCap className="w-7 h-7" />
+              </div>
+            )}
             <div>
+              {schoolName.trim() && (
+                <div className="text-xs font-bold text-slate-600 tracking-wider uppercase mb-0.5">
+                  {schoolName.trim()}
+                </div>
+              )}
               <h2 className="text-lg font-black tracking-tight text-slate-900 uppercase">
                 Boletim Escolar & Parecer Pedagógico
               </h2>
