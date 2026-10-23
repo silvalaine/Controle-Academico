@@ -1120,8 +1120,7 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
         return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
       }),
       'Faltas',
-      'Freq. %',
-      'Situação'
+      'Freq. %'
     ]
   ];
 
@@ -1144,15 +1143,13 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
     });
 
     const attendanceRate = Math.max(0, Math.round(((totalPossible - absences) / totalPossible) * 100));
-    const statusText = attendanceRate >= 75 ? 'Regular' : 'Atenção';
 
     return [
       String(student.rollNumber).padStart(2, '0'),
       student.name,
       ...dateStatuses,
       String(absences),
-      `${attendanceRate}%`,
-      statusText
+      `${attendanceRate}%`
     ];
   });
 

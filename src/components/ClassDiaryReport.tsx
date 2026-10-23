@@ -436,8 +436,7 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
                         );
                       })}
                       <th className="py-2 px-2 text-center w-14 border-r border-slate-300">Faltas</th>
-                      <th className="py-2 px-2.5 text-center w-16 border-r border-slate-300">Freq. %</th>
-                      <th className="py-2 px-2.5 text-center w-20">Situação</th>
+                      <th className="py-2 px-2.5 text-center w-16">Freq. %</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -479,17 +478,10 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
                             {absences}
                           </span>
                         </td>
-                        <td className="py-1.5 px-2 text-center font-bold border-r border-slate-300">
+                        <td className="py-1.5 px-2 text-center font-bold">
                           <span className={isAlert ? 'text-rose-700 font-black' : 'text-slate-800'}>
                             {attendanceRate}%
                           </span>
-                        </td>
-                        <td className="py-1.5 px-2 text-center text-[10px] font-semibold">
-                          {isAlert ? (
-                            <span className="text-rose-700 font-bold">Atenção</span>
-                          ) : (
-                            <span className="text-emerald-700">Regular</span>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -502,11 +494,8 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
                       <td className="py-2 px-2 text-center text-rose-700 font-bold border-r border-slate-300">
                         {studentAttendanceStats.reduce((sum, s) => sum + s.absences, 0)} Faltas
                       </td>
-                      <td className="py-2 px-2 text-center text-indigo-700 font-bold border-r border-slate-300">
+                      <td className="py-2 px-2 text-center text-indigo-700 font-bold">
                         {overallClassAttendance}%
-                      </td>
-                      <td className="py-2 px-2 text-center text-[10px] text-emerald-700 font-bold">
-                        {totalLessonsTaught} Dadas
                       </td>
                     </tr>
                   </tfoot>
