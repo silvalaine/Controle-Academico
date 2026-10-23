@@ -417,12 +417,12 @@ export function generateAttendanceReportPDF(
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },
       1: { halign: 'center', cellWidth: 22 },
-      2: { cellWidth: 62 },
+      2: { cellWidth: 65 },
       3: { halign: 'center', cellWidth: 14 },
       4: { halign: 'center', cellWidth: 14 },
       5: { halign: 'center', cellWidth: 14 },
       6: { halign: 'center', cellWidth: 14 },
-      7: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
+      7: { halign: 'center', cellWidth: 15, fontStyle: 'bold' },
       8: { halign: 'center', cellWidth: 24, fontStyle: 'bold' }
     },
     didParseCell: (data) => {
@@ -1156,6 +1156,14 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
   const faltasColIdx = 2 + displayedDates.length;
   const freqColIdx = 3 + displayedDates.length;
 
+  const totalTableWidth = pageWidth - 28; // 297mm - 28mm = 269mm
+  const rollWidth = 10;
+  const dateColWidth = 7;
+  const datesTotalWidth = displayedDates.length * dateColWidth;
+  const faltasWidth = 15;
+  const freqWidth = 16;
+  const studentNameWidth = Math.max(70, totalTableWidth - rollWidth - datesTotalWidth - faltasWidth - freqWidth);
+
   autoTable(doc, {
     head: attendanceHead,
     body: attendanceBody,
@@ -1176,14 +1184,14 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
       lineColor: [203, 213, 225]
     },
     columnStyles: {
-      0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 'auto', minCellWidth: 70 },
+      0: { cellWidth: rollWidth, halign: 'center', fontStyle: 'bold' },
+      1: { cellWidth: studentNameWidth },
       ...displayedDates.reduce((acc: any, _, idx) => {
-        acc[idx + 2] = { cellWidth: 7, halign: 'center' };
+        acc[idx + 2] = { cellWidth: dateColWidth, halign: 'center' };
         return acc;
       }, {}),
-      [faltasColIdx]: { cellWidth: 16, halign: 'center' },
-      [freqColIdx]: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }
+      [faltasColIdx]: { cellWidth: faltasWidth, halign: 'center' },
+      [freqColIdx]: { cellWidth: freqWidth, halign: 'center', fontStyle: 'bold' }
     }
   });
 
