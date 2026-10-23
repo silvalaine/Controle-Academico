@@ -418,16 +418,16 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
                 <table className="w-full text-xs text-left border-collapse border border-slate-300">
                   <thead>
                     <tr className="bg-slate-50 text-slate-800 font-bold border-b border-slate-300">
-                      <th className="py-2 px-2 text-center w-9 border-r border-slate-300">Nº</th>
-                      <th className="py-2 px-2.5 w-24 border-r border-slate-300">Matrícula</th>
-                      <th className="py-2 px-3 border-r border-slate-300 min-w-[180px]">Nome do Estudante</th>
+                      <th className="py-2 px-2 text-center w-9 border-r border-slate-300 shrink-0">Nº</th>
+                      <th className="py-2 px-2.5 w-24 border-r border-slate-300 shrink-0">Matrícula</th>
+                      <th className="py-2 px-3 border-r border-slate-300 min-w-[240px] w-full">Nome do Estudante</th>
                       {distinctDates.map((dateStr, idx) => {
                         const parts = dateStr.split('-');
                         const shortDate = parts.length === 3 ? `${parts[2]}/${parts[1]}` : dateStr;
                         return (
                           <th
                             key={idx}
-                            className="py-1 px-1 text-center border-r border-slate-300 w-9 text-[10px]"
+                            className="py-1 px-1 text-center border-r border-slate-300 w-9 shrink-0 text-[10px]"
                             title={`Data: ${dateStr}`}
                           >
                             <span className="font-bold text-slate-700 block">{shortDate}</span>
@@ -435,8 +435,8 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
                           </th>
                         );
                       })}
-                      <th className="py-2 px-2 text-center w-14 border-r border-slate-300">Faltas</th>
-                      <th className="py-2 px-2.5 text-center w-16">Freq. %</th>
+                      <th className="py-2 px-2 text-center w-14 shrink-0 border-r border-slate-300">Faltas</th>
+                      <th className="py-2 px-2.5 text-center w-16 shrink-0">Freq. %</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">

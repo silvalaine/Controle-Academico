@@ -1153,6 +1153,9 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
     ];
   });
 
+  const faltasColIdx = 2 + displayedDates.length;
+  const freqColIdx = 3 + displayedDates.length;
+
   autoTable(doc, {
     head: attendanceHead,
     body: attendanceBody,
@@ -1174,11 +1177,13 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
     },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 50 },
+      1: { cellWidth: 'auto', minCellWidth: 70 },
       ...displayedDates.reduce((acc: any, _, idx) => {
         acc[idx + 2] = { cellWidth: 7, halign: 'center' };
         return acc;
-      }, {})
+      }, {}),
+      [faltasColIdx]: { cellWidth: 16, halign: 'center' },
+      [freqColIdx]: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }
     }
   });
 
