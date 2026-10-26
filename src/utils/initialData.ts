@@ -10,7 +10,9 @@ import {
   TermRecoveryRecord,
   FinalRecoveryRecord,
   StudentIncident,
-  IncidentTypeDefinition
+  IncidentTypeDefinition,
+  BookAssignment,
+  StudentBookCheck
 } from '../types';
 
 export const initialAcademicYears: AcademicYear[] = [
@@ -609,5 +611,69 @@ export const initialIncidentTypes: IncidentTypeDefinition[] = [
     color: 'slate',
     isDefault: true
   }
+];
+
+export const initialBookAssignments: BookAssignment[] = [
+  {
+    id: 'bk-1',
+    classId: 'class-9a',
+    term: 1,
+    bookTitle: 'Livro Didático de Matemática - PNLD',
+    unitOrChapter: 'Capítulo 1 - Números Reais & Radiciação',
+    pages: 'págs. 24 a 31',
+    assignedDate: '2026-03-02',
+    dueDate: '2026-03-09',
+    description: 'Exercícios 1 ao 15 no próprio livro com desenvolvimento dos cálculos a lápis.',
+    maxScore: 10.0,
+    createdAt: '2026-03-02T10:00:00.000Z'
+  },
+  {
+    id: 'bk-2',
+    classId: 'class-9a',
+    term: 1,
+    bookTitle: 'Caderno de Atividades Complementares',
+    unitOrChapter: 'Unidade 2 - Produtos Notáveis e Fatoração',
+    pages: 'págs. 40 a 45',
+    assignedDate: '2026-03-23',
+    dueDate: '2026-03-30',
+    description: 'Atividades práticas de fixação e fatoração de polinômios.',
+    maxScore: 10.0,
+    createdAt: '2026-03-23T10:00:00.000Z'
+  },
+  {
+    id: 'bk-3',
+    classId: 'class-9a',
+    term: 2,
+    bookTitle: 'Livro Didático de Matemática - PNLD',
+    unitOrChapter: 'Capítulo 3 - Equações do 2º Grau & Teorema de Pitágoras',
+    pages: 'págs. 68 a 76',
+    assignedDate: '2026-05-11',
+    dueDate: '2026-05-18',
+    description: 'Problemas contextualizados e cálculo da hipotenusa em figuras planas.',
+    maxScore: 10.0,
+    createdAt: '2026-05-11T10:00:00.000Z'
+  }
+];
+
+export const initialStudentBookChecks: StudentBookCheck[] = [
+  // Assignment 1 (bk-1) checks for class-9a students
+  { id: 'sbc-1-1', bookAssignmentId: 'bk-1', studentId: 'std-1', classId: 'class-9a', status: 'visto_completo', score: 10.0, checkedAt: '2026-03-09', notes: 'Excelente resolução com todos os cálculos.' },
+  { id: 'sbc-1-2', bookAssignmentId: 'bk-1', studentId: 'std-2', classId: 'class-9a', status: 'incompleto', score: 6.0, checkedAt: '2026-03-09', notes: 'Faltaram as questões 12 a 15 da pág. 31.' },
+  { id: 'sbc-1-3', bookAssignmentId: 'bk-1', studentId: 'std-3', classId: 'class-9a', status: 'visto_completo', score: 10.0, checkedAt: '2026-03-09', notes: 'Caprichado e organizado.' },
+  { id: 'sbc-1-4', bookAssignmentId: 'bk-1', studentId: 'std-4', classId: 'class-9a', status: 'nao_fez', score: 0.0, checkedAt: '2026-03-09', notes: 'Esqueceu o livro em casa.' },
+  { id: 'sbc-1-5', bookAssignmentId: 'bk-1', studentId: 'std-5', classId: 'class-9a', status: 'visto_completo', score: 9.5, checkedAt: '2026-03-09', notes: 'Muito bom trabalho.' },
+  { id: 'sbc-1-6', bookAssignmentId: 'bk-1', studentId: 'std-6', classId: 'class-9a', status: 'atrasado', score: 8.0, checkedAt: '2026-03-11', notes: 'Entregue 2 dias após o prazo.' },
+  { id: 'sbc-1-7', bookAssignmentId: 'bk-1', studentId: 'std-7', classId: 'class-9a', status: 'visto_completo', score: 10.0, checkedAt: '2026-03-09', notes: 'Parabéns!' },
+  { id: 'sbc-1-8', bookAssignmentId: 'bk-1', studentId: 'std-8', classId: 'class-9a', status: 'visto_completo', score: 8.5, checkedAt: '2026-03-09', notes: 'Respondeu todas as questões.' },
+
+  // Assignment 2 (bk-2) checks for class-9a students
+  { id: 'sbc-2-1', bookAssignmentId: 'bk-2', studentId: 'std-1', classId: 'class-9a', status: 'visto_completo', score: 10.0, checkedAt: '2026-03-30' },
+  { id: 'sbc-2-2', bookAssignmentId: 'bk-2', studentId: 'std-2', classId: 'class-9a', status: 'visto_completo', score: 9.0, checkedAt: '2026-03-30', notes: 'Recuperou a pendência do livro anterior.' },
+  { id: 'sbc-2-3', bookAssignmentId: 'bk-2', studentId: 'std-3', classId: 'class-9a', status: 'visto_completo', score: 10.0, checkedAt: '2026-03-30' },
+  { id: 'sbc-2-4', bookAssignmentId: 'bk-2', studentId: 'std-4', classId: 'class-9a', status: 'incompleto', score: 5.0, checkedAt: '2026-03-30', notes: 'Fez apenas a pág. 40.' },
+  { id: 'sbc-2-5', bookAssignmentId: 'bk-2', studentId: 'std-5', classId: 'class-9a', status: 'visto_completo', score: 9.0, checkedAt: '2026-03-30' },
+  { id: 'sbc-2-6', bookAssignmentId: 'bk-2', studentId: 'std-6', classId: 'class-9a', status: 'visto_completo', score: 8.5, checkedAt: '2026-03-30' },
+  { id: 'sbc-2-7', bookAssignmentId: 'bk-2', studentId: 'std-7', classId: 'class-9a', status: 'visto_completo', score: 10.0, checkedAt: '2026-03-30' },
+  { id: 'sbc-2-8', bookAssignmentId: 'bk-2', studentId: 'std-8', classId: 'class-9a', status: 'justificado', score: null, checkedAt: '2026-03-30', notes: 'Atestado médico no dia da correção.' }
 ];
 

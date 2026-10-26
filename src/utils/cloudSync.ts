@@ -13,7 +13,9 @@ import {
   TermRecoveryRecord,
   FinalRecoveryRecord,
   StudentIncident,
-  IncidentTypeDefinition
+  IncidentTypeDefinition,
+  BookAssignment,
+  StudentBookCheck
 } from '../types';
 import { getRegisteredUsers, saveRegisteredUsers } from './auth';
 
@@ -330,6 +332,34 @@ export function mergeAppState(local: AppDataState, remote: AppDataState): AppDat
   });
   const incidentTypes = Array.from(incidentTypesMap.values());
 
+  // Merge Book Assignments excluding deleted classes
+  const bookAssignmentsMap = new Map<string, BookAssignment>();
+  (local.bookAssignments || []).forEach(b => {
+    if (b && b.id && !deletedClassIds.has(b.classId)) {
+      bookAssignmentsMap.set(b.id, b);
+    }
+  });
+  (remote.bookAssignments || []).forEach(b => {
+    if (b && b.id && !deletedClassIds.has(b.classId) && !bookAssignmentsMap.has(b.id)) {
+      bookAssignmentsMap.set(b.id, b);
+    }
+  });
+  const bookAssignments = Array.from(bookAssignmentsMap.values());
+
+  // Merge Student Book Checks
+  const studentBookChecksMap = new Map<string, StudentBookCheck>();
+  (local.studentBookChecks || []).forEach(bc => {
+    if (bc && bc.id && !deletedClassIds.has(bc.classId) && !deletedStudentIds.has(bc.studentId)) {
+      studentBookChecksMap.set(bc.id, bc);
+    }
+  });
+  (remote.studentBookChecks || []).forEach(bc => {
+    if (bc && bc.id && !deletedClassIds.has(bc.classId) && !deletedStudentIds.has(bc.studentId) && !studentBookChecksMap.has(bc.id)) {
+      studentBookChecksMap.set(bc.id, bc);
+    }
+  });
+  const studentBookChecks = Array.from(studentBookChecksMap.values());
+
   // Recoveries & Observations
   const termRecoveries = (local.termRecoveries || []).filter(
     tr => !deletedStudentIds.has(tr.studentId) && !deletedClassIds.has(tr.classId)
@@ -363,6 +393,8 @@ export function mergeAppState(local: AppDataState, remote: AppDataState): AppDat
     observations,
     incidents,
     incidentTypes,
+    bookAssignments,
+    studentBookChecks,
     selectedYearId: validYearId,
     selectedClassId: validClassId,
     selectedTerm: typeof local.selectedTerm === 'number' ? local.selectedTerm : 1,

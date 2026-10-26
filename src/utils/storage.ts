@@ -10,7 +10,9 @@ import {
   TermRecoveryRecord,
   FinalRecoveryRecord,
   StudentIncident,
-  IncidentTypeDefinition
+  IncidentTypeDefinition,
+  BookAssignment,
+  StudentBookCheck
 } from '../types';
 import {
   initialAcademicYears,
@@ -24,7 +26,9 @@ import {
   initialTermRecoveries,
   initialFinalRecoveries,
   initialIncidents,
-  initialIncidentTypes
+  initialIncidentTypes,
+  initialBookAssignments,
+  initialStudentBookChecks
 } from './initialData';
 
 export interface AppDataState {
@@ -40,6 +44,8 @@ export interface AppDataState {
   observations: StudentObservation[];
   incidents: StudentIncident[];
   incidentTypes: IncidentTypeDefinition[];
+  bookAssignments?: BookAssignment[];
+  studentBookChecks?: StudentBookCheck[];
   selectedYearId: string;
   selectedClassId: string;
   selectedTerm: number;
@@ -157,7 +163,9 @@ export function loadStoredData(): AppDataState {
           termRecoveries: parsed.termRecoveries || initialTermRecoveries,
           finalRecoveries: parsed.finalRecoveries || initialFinalRecoveries,
           incidents: parsed.incidents || initialIncidents,
-          incidentTypes: parsed.incidentTypes || initialIncidentTypes
+          incidentTypes: parsed.incidentTypes || initialIncidentTypes,
+          bookAssignments: parsed.bookAssignments || initialBookAssignments,
+          studentBookChecks: parsed.studentBookChecks || initialStudentBookChecks
         };
       }
     }
@@ -182,6 +190,8 @@ export function loadStoredData(): AppDataState {
     observations: initialObservations,
     incidents: initialIncidents,
     incidentTypes: initialIncidentTypes,
+    bookAssignments: initialBookAssignments,
+    studentBookChecks: initialStudentBookChecks,
     selectedYearId: defaultYear.id,
     selectedClassId: defaultClass.id,
     selectedTerm: 1,

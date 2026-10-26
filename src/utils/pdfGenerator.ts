@@ -11,7 +11,9 @@ import {
   TermRecoveryRecord,
   FinalRecoveryRecord,
   StudentIncident,
-  IncidentTypeDefinition
+  IncidentTypeDefinition,
+  BookAssignment,
+  StudentBookCheck
 } from '../types';
 import {
   calculateStudentTermAverage,
@@ -1555,5 +1557,209 @@ export function generateIncidentsPDF(
   }
 
   const filename = `Ocorrencias_${currentClass.name.replace(/\s+/g, '_')}_${filterDate || 'Geral'}.pdf`;
+  doc.save(filename);
+}
+
+export function generateBookCorrectionReportPDF(options: {
+  currentClass: ClassRoom;
+  academicYearTitle: string;
+  students: Student[];
+  assignment: BookAssignment;
+  checks: StudentBookCheck[];
+  schoolLogoOption?: {
+    includeLogo?: boolean;
+    schoolLogo?: string | null;
+    schoolName?: string;
+  };
+}) {
+  const { currentClass, academicYearTitle, students, assignment, checks, schoolLogoOption } = options;
+  const doc = new jsPDF('p', 'mm', 'a4');
+
+  const prefIncludeLogo = schoolLogoOption?.includeLogo ?? getIncludeSchoolLogoPreference();
+  const activeLogo = prefIncludeLogo ? (schoolLogoOption?.schoolLogo ?? getSchoolLogo()) : null;
+  const activeSchoolName = (schoolLogoOption?.schoolName?.trim() || getSchoolName()).toUpperCase();
+
+  let startX = 14;
+  if (activeLogo) {
+    const { width: drawnW } = drawSchoolLogoInPDF(doc, activeLogo, 14, 8, 16, 16);
+    startX = 14 + (drawnW > 0 ? drawnW + 4 : 0);
+  }
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text(activeSchoolName, startX, 12);
+
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(79, 70, 229);
+  doc.text('CONTROLE DE CORREÇÃO DE LIVROS & VISTOS', startX, 18);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | Ano: ${academicYearTitle} | ${getTermLabel(currentClass.termType, assignment.term)}`,
+    startX,
+    23
+  );
+
+  // Assignment details box
+  const boxY = 27;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, boxY, 182, 17, 2, 2, 'FD');
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Material / Livro: ${assignment.bookTitle}`, 17, boxY + 5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Etapa / Páginas: ${assignment.unitOrChapter} (${assignment.pages})`, 17, boxY + 10);
+
+  const dateInfo = `Solicitado em: ${assignment.assignedDate.split('-').reverse().join('/')} | Data da Correção: ${assignment.dueDate.split('-').reverse().join('/')}`;
+  doc.text(dateInfo, 17, boxY + 14);
+
+  if (assignment.maxScore) {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(79, 70, 229);
+    doc.text(`Pontuação Máxima: ${assignment.maxScore.toFixed(1)} pts`, 140, boxY + 14);
+  }
+
+  const activeStudents = students
+    .filter(s => s.classId === currentClass.id && s.status === 'active')
+    .sort((a, b) => a.rollNumber - b.rollNumber);
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'visto_completo': return 'Visto Completo (OK)';
+      case 'incompleto': return 'Incompleto / Refazer';
+      case 'nao_fez': return 'Não Fez / Não Entregue';
+      case 'atrasado': return 'Entregue com Atraso';
+      case 'justificado': return 'Justificado / Disp.';
+      default: return 'Pendente';
+    }
+  };
+
+  const body = activeStudents.map(s => {
+    const chk = checks.find(c => c.studentId === s.id && c.bookAssignmentId === assignment.id);
+    const statusText = chk ? getStatusLabel(chk.status) : 'Pendente';
+    const scoreText = chk?.score !== undefined && chk?.score !== null ? chk.score.toFixed(1) : '—';
+    const notesText = chk?.notes || '—';
+
+    return [
+      String(s.rollNumber).padStart(2, '0'),
+      s.name,
+      statusText,
+      assignment.maxScore ? scoreText : '',
+      notesText
+    ];
+  });
+
+  const head = assignment.maxScore
+    ? [['Nº', 'Nome do Estudante', 'Situação do Visto', 'Nota', 'Observações / Apontamentos']]
+    : [['Nº', 'Nome do Estudante', 'Situação do Visto', '', 'Observações / Apontamentos']];
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: boxY + 20,
+    theme: 'grid',
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.5,
+      font: 'helvetica'
+    },
+    headStyles: {
+      fillColor: [79, 70, 229],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold'
+    },
+    columnStyles: {
+      0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+      1: { cellWidth: 60, fontStyle: 'bold' },
+      2: { cellWidth: 38, halign: 'center' },
+      3: assignment.maxScore ? { cellWidth: 16, halign: 'center' } : { cellWidth: 0 },
+      4: { cellWidth: assignment.maxScore ? 56 : 72 }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 2) {
+        const txt = String(data.cell.raw);
+        if (txt.includes('Completo')) {
+          data.cell.styles.textColor = [16, 120, 72];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (txt.includes('Incompleto')) {
+          data.cell.styles.textColor = [180, 83, 9];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (txt.includes('Não Fez')) {
+          data.cell.styles.textColor = [225, 29, 72];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (txt.includes('Atraso')) {
+          data.cell.styles.textColor = [124, 58, 237];
+        }
+      }
+    }
+  });
+
+  // Calculate summary stats
+  let totalChecked = 0;
+  let totalComplete = 0;
+  let totalIncomplete = 0;
+  let totalNotDone = 0;
+
+  activeStudents.forEach(s => {
+    const chk = checks.find(c => c.studentId === s.id && c.bookAssignmentId === assignment.id);
+    if (chk) {
+      if (chk.status === 'visto_completo') {
+        totalComplete++;
+        totalChecked++;
+      } else if (chk.status === 'incompleto') {
+        totalIncomplete++;
+        totalChecked++;
+      } else if (chk.status === 'nao_fez') {
+        totalNotDone++;
+        totalChecked++;
+      } else {
+        totalChecked++;
+      }
+    }
+  });
+
+  const percentComplete = activeStudents.length > 0 ? Math.round((totalComplete / activeStudents.length) * 100) : 0;
+  const lastY = (doc as any).lastAutoTable.finalY + 8;
+
+  if (lastY < 265) {
+    // Stats mini-banner
+    doc.setFillColor(241, 245, 249);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, lastY, 182, 10, 1.5, 1.5, 'FD');
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text(
+      `Total de Alunos: ${activeStudents.length} | Vistos Completos: ${totalComplete} (${percentComplete}%) | Incompletos: ${totalIncomplete} | Não Fez: ${totalNotDone}`,
+      17,
+      lastY + 6.5
+    );
+
+    // Signatures
+    const signY = lastY + 22;
+    if (signY < 280) {
+      doc.setDrawColor(180, 180, 180);
+      doc.line(20, signY, 85, signY);
+      doc.line(125, signY, 190, signY);
+
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Professor(a) Responsável', 52.5, signY + 4, { align: 'center' });
+      doc.text('Coordenação Pedagógica / Visto', 157.5, signY + 4, { align: 'center' });
+    }
+  }
+
+  const cleanBookName = assignment.bookTitle.slice(0, 15).replace(/\s+/g, '_');
+  const filename = `Correcao_Livro_${currentClass.name.replace(/\s+/g, '_')}_${cleanBookName}.pdf`;
   doc.save(filename);
 }

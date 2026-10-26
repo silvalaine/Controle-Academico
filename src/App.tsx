@@ -22,6 +22,7 @@ import { SyncEmailModal } from './components/SyncEmailModal';
 import { EditClassModal } from './components/EditClassModal';
 import { GoogleDriveBackupModal } from './components/GoogleDriveBackupModal';
 import { UserRecoveryModal } from './components/UserRecoveryModal';
+import { BookCorrectionTracker } from './components/BookCorrectionTracker';
 import { Layers, CheckCircle2, AlertCircle, ExternalLink, ShieldAlert, HardDrive } from 'lucide-react';
 import { getCurrentUser, logoutUser } from './utils/auth';
 import {
@@ -47,6 +48,8 @@ import {
   LessonContent,
   StudentIncident,
   IncidentTypeDefinition,
+  BookAssignment,
+  StudentBookCheck,
   User
 } from './types';
 
@@ -539,6 +542,73 @@ export default function App() {
     }));
   };
 
+  // --- Book Correction Handlers ---
+  const handleAddBookAssignment = (newAssignment: Omit<BookAssignment, 'id' | 'createdAt'>) => {
+    const id = `bk-${Date.now()}`;
+    const item: BookAssignment = {
+      ...newAssignment,
+      id,
+      createdAt: new Date().toISOString()
+    };
+    setData(prev => ({
+      ...prev,
+      bookAssignments: [...(prev.bookAssignments || []), item]
+    }));
+  };
+
+  const handleUpdateBookAssignment = (updatedAssignment: BookAssignment) => {
+    setData(prev => ({
+      ...prev,
+      bookAssignments: (prev.bookAssignments || []).map(b => (b.id === updatedAssignment.id ? updatedAssignment : b))
+    }));
+  };
+
+  const handleDeleteBookAssignment = (assignmentId: string) => {
+    setData(prev => ({
+      ...prev,
+      bookAssignments: (prev.bookAssignments || []).filter(b => b.id !== assignmentId),
+      studentBookChecks: (prev.studentBookChecks || []).filter(c => c.bookAssignmentId !== assignmentId)
+    }));
+  };
+
+  const handleUpdateStudentBookCheck = (updatedCheck: StudentBookCheck) => {
+    setData(prev => {
+      const existing = (prev.studentBookChecks || []).findIndex(
+        c => c.id === updatedCheck.id || (c.studentId === updatedCheck.studentId && c.bookAssignmentId === updatedCheck.bookAssignmentId)
+      );
+      let nextList = [...(prev.studentBookChecks || [])];
+      if (existing >= 0) {
+        nextList[existing] = updatedCheck;
+      } else {
+        nextList.push(updatedCheck);
+      }
+      return {
+        ...prev,
+        studentBookChecks: nextList
+      };
+    });
+  };
+
+  const handleBatchUpdateStudentBookChecks = (checks: StudentBookCheck[]) => {
+    setData(prev => {
+      const current = [...(prev.studentBookChecks || [])];
+      checks.forEach(newChk => {
+        const idx = current.findIndex(
+          c => c.id === newChk.id || (c.studentId === newChk.studentId && c.bookAssignmentId === newChk.bookAssignmentId)
+        );
+        if (idx >= 0) {
+          current[idx] = newChk;
+        } else {
+          current.push(newChk);
+        }
+      });
+      return {
+        ...prev,
+        studentBookChecks: current
+      };
+    });
+  };
+
   // --- Management Handlers (Years, Classes, Students) ---
   const handleAddYear = (newYear: Omit<AcademicYear, 'id'>) => {
     const id = `year-${Date.now()}`;
@@ -1024,6 +1094,23 @@ export default function App() {
                 onAddLesson={handleAddLesson}
                 onUpdateLesson={handleUpdateLesson}
                 onDeleteLesson={handleDeleteLesson}
+                onSelectTerm={handleSelectTerm}
+              />
+            )}
+
+            {activeTab === 'book-checks' && (
+              <BookCorrectionTracker
+                currentClass={currentClass}
+                students={data.students}
+                academicYearTitle={currentYear?.title || 'Ano Letivo 2026'}
+                selectedTerm={data.selectedTerm}
+                bookAssignments={data.bookAssignments || []}
+                studentBookChecks={data.studentBookChecks || []}
+                onAddAssignment={handleAddBookAssignment}
+                onUpdateAssignment={handleUpdateBookAssignment}
+                onDeleteAssignment={handleDeleteBookAssignment}
+                onUpdateBookCheck={handleUpdateStudentBookCheck}
+                onBatchUpdateBookChecks={handleBatchUpdateStudentBookChecks}
                 onSelectTerm={handleSelectTerm}
               />
             )}

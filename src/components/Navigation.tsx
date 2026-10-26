@@ -4,6 +4,7 @@ import {
   TableProperties,
   CheckSquare,
   BookOpenCheck,
+  BookCheck,
   UserCheck,
   Users,
   ShieldAlert,
@@ -23,6 +24,7 @@ export type TabId =
   | 'grade-map'
   | 'attendance'
   | 'lessons'
+  | 'book-checks'
   | 'student-list'
   | 'incidents'
   | 'reports'
@@ -84,6 +86,13 @@ export const Navigation: React.FC<NavigationProps> = ({
       shortLabel: 'Conteúdos',
       fullLabel: 'Diário de Conteúdos & Aulas',
       icon: <BookOpenCheck className="w-4 h-4 shrink-0" />
+    },
+    {
+      id: 'book-checks',
+      label: 'Correção de Livros',
+      shortLabel: 'Livros',
+      fullLabel: 'Controle de Correção de Livros & Vistos',
+      icon: <BookCheck className="w-4 h-4 shrink-0" />
     },
     {
       id: 'student-list',

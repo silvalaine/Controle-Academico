@@ -170,3 +170,30 @@ export interface User {
   lastLoginAt?: string;
   assignedClassIds?: string[]; // IDs das turmas que o professor tem permissão de acessar
 }
+
+export type BookCheckStatus = 'visto_completo' | 'incompleto' | 'nao_fez' | 'atrasado' | 'justificado';
+
+export interface BookAssignment {
+  id: string;
+  classId: string;
+  term: number; // 1, 2, 3, 4
+  bookTitle: string; // Ex: "Livro Didático - Matemática PNLD", "Apostila Anglo"
+  unitOrChapter: string; // Ex: "Capítulo 4 - Teorema de Tales"
+  pages: string; // Ex: "págs. 65 a 72"
+  assignedDate: string; // YYYY-MM-DD
+  dueDate: string; // YYYY-MM-DD
+  description?: string; // Orientações ou exercícios específicos
+  maxScore?: number; // Pontos opcionais (ex: 10 ou 2.0)
+  createdAt: string;
+}
+
+export interface StudentBookCheck {
+  id: string;
+  bookAssignmentId: string;
+  studentId: string;
+  classId: string;
+  status: BookCheckStatus;
+  score?: number | null;
+  checkedAt?: string;
+  notes?: string;
+}
