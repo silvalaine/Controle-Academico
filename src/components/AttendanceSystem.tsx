@@ -20,7 +20,10 @@ import {
 } from '../types';
 import {
   calculateStudentAttendance,
-  getTermLabel
+  getTermLabel,
+  validateDateInTerm,
+  getTermForDate,
+  formatPeriodRange
 } from '../utils/calculations';
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
 import { ConfirmModal } from './ConfirmModal';
@@ -39,6 +42,7 @@ interface AttendanceSystemProps {
   selectedTerm: number;
   onSaveAttendance: (records: AttendanceRecord[]) => void;
   onDeleteAttendanceDate: (date: string) => void;
+  onSelectTerm?: (term: number) => void;
 }
 
 export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
@@ -47,7 +51,8 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
   attendances,
   selectedTerm,
   onSaveAttendance,
-  onDeleteAttendanceDate
+  onDeleteAttendanceDate,
+  onSelectTerm
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     // Check if there are existing dates, pick the latest or today
@@ -86,6 +91,10 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
     return rec?.note || '';
   };
 
+  // Detect corresponding term based on selectedDate and currentClass.termPeriods
+  const dateValidation = validateDateInTerm(selectedDate, selectedTerm, currentClass);
+  const targetTerm = dateValidation.detectedTerm;
+
   // Change single student status
   const handleSetStatus = (studentId: string, status: AttendanceStatus, note?: string) => {
     const existingIndex = attendances.findIndex(
@@ -97,7 +106,7 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
       id: existingIndex >= 0 ? attendances[existingIndex].id : `att-${Date.now()}-${studentId}`,
       classId: currentClass.id,
       date: selectedDate,
-      term: selectedTerm,
+      term: targetTerm,
       studentId,
       status,
       note: note !== undefined ? note : getStudentNote(studentId)
@@ -124,7 +133,7 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
         id: existingIndex >= 0 ? updated[existingIndex].id : `att-${Date.now()}-${student.id}`,
         classId: currentClass.id,
         date: selectedDate,
-        term: selectedTerm,
+        term: targetTerm,
         studentId: student.id,
         status: 'present',
         note: ''
@@ -295,6 +304,15 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
                 />
               </div>
 
+              {/* Detected Term Badge */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200/80 text-indigo-900 text-xs font-bold shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                <span>{dateValidation.detectedTermLabel}</span>
+                {dateValidation.detectedPeriodRange && (
+                  <span className="text-[11px] font-normal text-indigo-600 hidden md:inline">({dateValidation.detectedPeriodRange})</span>
+                )}
+              </div>
+
               {/* Quick Jump Buttons */}
               <button
                 onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
@@ -327,7 +345,7 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={handleMarkAllPresent}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
               >
                 <CheckCheck className="w-4 h-4" />
                 <span>Marcar Todos Presentes</span>
@@ -337,7 +355,7 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
                 <button
                   onClick={() => setIsDeleteDateOpen(true)}
                   title="Excluir lançamentos de presença deste dia"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg transition cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                   <span>Limpar Dia</span>
@@ -345,6 +363,27 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
               )}
             </div>
           </div>
+
+          {/* Term Mismatch Notice Banner */}
+          {!dateValidation.isExactMatch && (
+            <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  A data <strong>{selectedDate.split('-').reverse().join('/')}</strong> corresponde ao <strong>{dateValidation.detectedTermLabel}</strong> ({dateValidation.detectedPeriodRange}). As faltas e presenças serão vinculadas automaticamente a este período.
+                </span>
+              </div>
+              {onSelectTerm && (
+                <button
+                  type="button"
+                  onClick={() => onSelectTerm(targetTerm)}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shrink-0 transition cursor-pointer self-start sm:self-auto"
+                >
+                  Alternar aba para {dateValidation.detectedTermLabel}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Daily Quick Indicators */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

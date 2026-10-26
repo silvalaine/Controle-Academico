@@ -1012,6 +1012,7 @@ export default function App() {
                 selectedTerm={data.selectedTerm}
                 onSaveAttendance={handleSaveAttendance}
                 onDeleteAttendanceDate={handleDeleteAttendanceDate}
+                onSelectTerm={handleSelectTerm}
               />
             )}
 
@@ -1023,6 +1024,7 @@ export default function App() {
                 onAddLesson={handleAddLesson}
                 onUpdateLesson={handleUpdateLesson}
                 onDeleteLesson={handleDeleteLesson}
+                onSelectTerm={handleSelectTerm}
               />
             )}
 

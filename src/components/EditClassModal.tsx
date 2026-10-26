@@ -10,7 +10,9 @@ import {
   AlertCircle,
   Calendar
 } from 'lucide-react';
-import { AcademicYear, ClassRoom, TermType, AnnualRecoveryFormula } from '../types';
+import { AcademicYear, ClassRoom, TermType, AnnualRecoveryFormula, TermPeriod } from '../types';
+import { TermPeriodsEditor } from './TermPeriodsEditor';
+import { getDefaultTermPeriods } from '../utils/calculations';
 
 interface EditClassModalProps {
   isOpen: boolean;
@@ -36,6 +38,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   const [passingGrade, setPassingGrade] = useState(6.0);
   const [passingRecoveryGrade, setPassingRecoveryGrade] = useState(5.0);
   const [annualRecoveryFormula, setAnnualRecoveryFormula] = useState<AnnualRecoveryFormula>('rec_final_direta');
+  const [termPeriods, setTermPeriods] = useState<TermPeriod[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,6 +52,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       setPassingGrade(typeof classRoom.passingGrade === 'number' ? classRoom.passingGrade : 6.0);
       setPassingRecoveryGrade(typeof classRoom.passingRecoveryGrade === 'number' ? classRoom.passingRecoveryGrade : 5.0);
       setAnnualRecoveryFormula(classRoom.annualRecoveryFormula || 'rec_final_direta');
+      const yr = academicYears.find(y => y.id === classRoom.academicYearId)?.year || 2026;
+      setTermPeriods(classRoom.termPeriods && classRoom.termPeriods.length > 0 ? classRoom.termPeriods : getDefaultTermPeriods(classRoom.termType || 'bimestral', yr));
       setError(null);
     }
   }, [classRoom, academicYears]);
@@ -77,7 +82,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       passingGrade: Number(passingGrade) || 6.0,
       passingRecoveryGrade: Number(passingRecoveryGrade) || 5.0,
       maxGrade: 10.0,
-      annualRecoveryFormula
+      annualRecoveryFormula,
+      termPeriods
     };
 
     onSave(updated);
@@ -86,7 +92,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 text-white relative shrink-0">
           <button
@@ -274,6 +280,16 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                 <option value="media_ponderada">Média Ponderada: (Anual × 6 + Rec × 4) ÷ 10</option>
                 <option value="substitui_menor_bimestre">Substituição da Menor Nota Bimestral</option>
               </select>
+            </div>
+
+            {/* Term Periods Configuration */}
+            <div className="sm:col-span-2 pt-2">
+              <TermPeriodsEditor
+                termType={termType}
+                termPeriods={termPeriods}
+                onChange={setTermPeriods}
+                academicYearNumber={academicYears.find(y => y.id === academicYearId)?.year || 2026}
+              />
             </div>
           </div>
 

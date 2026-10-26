@@ -6,7 +6,9 @@ import {
   Student,
   GradeCalculationType,
   TermRecoveryRecord,
-  FinalRecoveryRecord
+  FinalRecoveryRecord,
+  TermPeriod,
+  TermType
 } from '../types';
 
 export interface StudentTermGradeSummary {
@@ -40,6 +42,111 @@ export function getShortTermLabel(termType: 'bimestral' | 'trimestral', termNumb
     return `${termNumber}º Bim`;
   }
   return `${termNumber}º Trim`;
+}
+
+export function getDefaultTermPeriods(termType: TermType, year: number = new Date().getFullYear()): TermPeriod[] {
+  if (termType === 'bimestral') {
+    return [
+      { term: 1, startDate: `${year}-02-02`, endDate: `${year}-04-17` },
+      { term: 2, startDate: `${year}-04-20`, endDate: `${year}-07-03` },
+      { term: 3, startDate: `${year}-07-27`, endDate: `${year}-09-25` },
+      { term: 4, startDate: `${year}-09-28`, endDate: `${year}-12-18` }
+    ];
+  } else {
+    return [
+      { term: 1, startDate: `${year}-02-02`, endDate: `${year}-05-15` },
+      { term: 2, startDate: `${year}-05-18`, endDate: `${year}-08-28` },
+      { term: 3, startDate: `${year}-09-01`, endDate: `${year}-12-18` }
+    ];
+  }
+}
+
+export function formatPeriodRange(startDate?: string, endDate?: string): string {
+  if (!startDate && !endDate) return '';
+  const formatD = (d?: string) => {
+    if (!d) return '';
+    const parts = d.split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
+  };
+  if (startDate && endDate) {
+    return `${formatD(startDate)} a ${formatD(endDate)}`;
+  }
+  return startDate ? `Início: ${formatD(startDate)}` : `Término: ${formatD(endDate)}`;
+}
+
+/**
+ * Returns the effective term periods of a class, falling back to defaults if not customized.
+ */
+export function getClassTermPeriods(classRoom: ClassRoom, fallbackYear: number = 2026): TermPeriod[] {
+  if (classRoom.termPeriods && classRoom.termPeriods.length > 0) {
+    return classRoom.termPeriods;
+  }
+  return getDefaultTermPeriods(classRoom.termType, fallbackYear);
+}
+
+/**
+ * Determines which term (bimestre 1..4 or trimestre 1..3) a given date belongs to,
+ * according to the class's configured start and end dates.
+ */
+export function getTermForDate(dateStr: string, classRoom: ClassRoom, fallbackYear: number = 2026): number {
+  if (!dateStr) return 1;
+  const periods = getClassTermPeriods(classRoom, fallbackYear);
+  if (!periods || periods.length === 0) return 1;
+
+  // 1. Direct match within [startDate, endDate]
+  for (const p of periods) {
+    if (p.startDate && p.endDate) {
+      if (dateStr >= p.startDate && dateStr <= p.endDate) {
+        return p.term;
+      }
+    } else if (p.startDate && dateStr >= p.startDate) {
+      return p.term;
+    }
+  }
+
+  // 2. If date is earlier than the first term's start date
+  const sortedPeriods = [...periods].sort((a, b) => a.term - b.term);
+  const first = sortedPeriods[0];
+  if (first.startDate && dateStr < first.startDate) {
+    return first.term;
+  }
+
+  // 3. If date is between term N and N+1 (e.g. vacation / recess interval)
+  for (let i = 0; i < sortedPeriods.length - 1; i++) {
+    const curr = sortedPeriods[i];
+    const next = sortedPeriods[i + 1];
+    if (curr.endDate && next.startDate) {
+      if (dateStr > curr.endDate && dateStr < next.startDate) {
+        // Associate with the upcoming term
+        return next.term;
+      }
+    }
+  }
+
+  // 4. If date is beyond the last term's end date
+  const last = sortedPeriods[sortedPeriods.length - 1];
+  return last.term;
+}
+
+/**
+ * Validates if a date belongs to the designated term, and provides metadata about the detected term.
+ */
+export function validateDateInTerm(dateStr: string, currentTerm: number, classRoom: ClassRoom, fallbackYear: number = 2026) {
+  const detectedTerm = getTermForDate(dateStr, classRoom, fallbackYear);
+  const periods = getClassTermPeriods(classRoom, fallbackYear);
+  const currentPeriod = periods.find(p => p.term === currentTerm);
+  const detectedPeriod = periods.find(p => p.term === detectedTerm);
+
+  const isExactMatch = detectedTerm === currentTerm;
+
+  return {
+    isExactMatch,
+    detectedTerm,
+    detectedTermLabel: getTermLabel(classRoom.termType, detectedTerm),
+    detectedPeriodRange: detectedPeriod ? formatPeriodRange(detectedPeriod.startDate, detectedPeriod.endDate) : '',
+    currentTermLabel: getTermLabel(classRoom.termType, currentTerm),
+    currentPeriodRange: currentPeriod ? formatPeriodRange(currentPeriod.startDate, currentPeriod.endDate) : ''
+  };
 }
 
 /**

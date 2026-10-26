@@ -45,7 +45,13 @@ export const initialClasses: ClassRoom[] = [
     maxGrade: 10.0,
     termType: 'bimestral',
     gradeCalculationType: 'aritmetica',
-    annualRecoveryFormula: 'rec_final_direta'
+    annualRecoveryFormula: 'rec_final_direta',
+    termPeriods: [
+      { term: 1, startDate: '2026-02-02', endDate: '2026-04-17' },
+      { term: 2, startDate: '2026-04-20', endDate: '2026-07-03' },
+      { term: 3, startDate: '2026-07-27', endDate: '2026-09-25' },
+      { term: 4, startDate: '2026-09-28', endDate: '2026-12-18' }
+    ]
   },
   {
     id: 'class-8b',
@@ -59,7 +65,13 @@ export const initialClasses: ClassRoom[] = [
     maxGrade: 10.0,
     termType: 'bimestral',
     gradeCalculationType: 'aritmetica',
-    annualRecoveryFormula: 'rec_final_direta'
+    annualRecoveryFormula: 'rec_final_direta',
+    termPeriods: [
+      { term: 1, startDate: '2026-02-02', endDate: '2026-04-17' },
+      { term: 2, startDate: '2026-04-20', endDate: '2026-07-03' },
+      { term: 3, startDate: '2026-07-27', endDate: '2026-09-25' },
+      { term: 4, startDate: '2026-09-28', endDate: '2026-12-18' }
+    ]
   },
   {
     id: 'class-3m',
@@ -73,7 +85,12 @@ export const initialClasses: ClassRoom[] = [
     maxGrade: 10.0,
     termType: 'trimestral',
     gradeCalculationType: 'aritmetica',
-    annualRecoveryFormula: 'rec_final_direta'
+    annualRecoveryFormula: 'rec_final_direta',
+    termPeriods: [
+      { term: 1, startDate: '2026-02-02', endDate: '2026-05-15' },
+      { term: 2, startDate: '2026-05-18', endDate: '2026-08-28' },
+      { term: 3, startDate: '2026-09-01', endDate: '2026-12-18' }
+    ]
   }
 ];
 

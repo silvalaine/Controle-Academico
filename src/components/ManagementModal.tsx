@@ -18,11 +18,13 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { AcademicYear, ClassRoom, Student, StudentStatus, TermType, AnnualRecoveryFormula, User } from '../types';
+import { AcademicYear, ClassRoom, Student, StudentStatus, TermType, AnnualRecoveryFormula, User, TermPeriod } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { generateStudentListPDF } from '../utils/pdfGenerator';
 import { UserManagement } from './UserManagement';
 import { SchoolLogoSelector } from './SchoolLogoSelector';
+import { TermPeriodsEditor } from './TermPeriodsEditor';
+import { getDefaultTermPeriods, formatPeriodRange } from '../utils/calculations';
 import {
   getSchoolLogo,
   getSchoolName,
@@ -121,6 +123,7 @@ export const ManagementModal: React.FC<ManagementProps> = ({
   const [classPassingRecoveryGrade, setClassPassingRecoveryGrade] = useState(5.0);
   const [classTermType, setClassTermType] = useState<TermType>('bimestral');
   const [classAnnualRecoveryFormula, setClassAnnualRecoveryFormula] = useState<AnnualRecoveryFormula>('rec_final_direta');
+  const [classTermPeriods, setClassTermPeriods] = useState<TermPeriod[]>(() => getDefaultTermPeriods('bimestral', 2026));
 
   // Add Year
   const [isAddingYear, setIsAddingYear] = useState(false);
@@ -327,6 +330,8 @@ export const ManagementModal: React.FC<ManagementProps> = ({
     setClassPassingRecoveryGrade(5.0);
     setClassTermType('bimestral');
     setClassAnnualRecoveryFormula('rec_final_direta');
+    const yr = academicYears.find(y => y.id === selectedYearId)?.year || new Date().getFullYear();
+    setClassTermPeriods(getDefaultTermPeriods('bimestral', yr));
     setIsAddingClass(true);
   };
 
@@ -341,6 +346,8 @@ export const ManagementModal: React.FC<ManagementProps> = ({
     setClassPassingRecoveryGrade(c.passingRecoveryGrade ?? 5.0);
     setClassTermType(c.termType);
     setClassAnnualRecoveryFormula(c.annualRecoveryFormula || 'rec_final_direta');
+    const yr = academicYears.find(y => y.id === (c.academicYearId || selectedYearId))?.year || new Date().getFullYear();
+    setClassTermPeriods(c.termPeriods && c.termPeriods.length > 0 ? c.termPeriods : getDefaultTermPeriods(c.termType, yr));
     setIsAddingClass(true);
   };
 
@@ -365,7 +372,8 @@ export const ManagementModal: React.FC<ManagementProps> = ({
         passingGrade: Number(classPassingGrade) || 6.0,
         passingRecoveryGrade: Number(classPassingRecoveryGrade) || 5.0,
         termType: classTermType,
-        annualRecoveryFormula: classAnnualRecoveryFormula
+        annualRecoveryFormula: classAnnualRecoveryFormula,
+        termPeriods: classTermPeriods
       });
     } else {
       onAddClass({
@@ -379,7 +387,8 @@ export const ManagementModal: React.FC<ManagementProps> = ({
         maxGrade: 10.0,
         termType: classTermType,
         gradeCalculationType: 'aritmetica',
-        annualRecoveryFormula: classAnnualRecoveryFormula
+        annualRecoveryFormula: classAnnualRecoveryFormula,
+        termPeriods: classTermPeriods
       });
     }
 
@@ -1096,6 +1105,16 @@ export const ManagementModal: React.FC<ManagementProps> = ({
                   </select>
                 </div>
 
+                {/* Term Periods (Bimestres / Trimestres) Início e Término */}
+                <div className="md:col-span-3 pt-2">
+                  <TermPeriodsEditor
+                    termType={classTermType}
+                    termPeriods={classTermPeriods}
+                    onChange={setClassTermPeriods}
+                    academicYearNumber={academicYears.find(y => y.id === (classAcademicYearId || selectedYearId))?.year || 2026}
+                  />
+                </div>
+
                 <div className="md:col-span-3 flex justify-end gap-2 pt-2 border-t border-indigo-100">
                   <button
                     type="button"
@@ -1146,6 +1165,23 @@ export const ManagementModal: React.FC<ManagementProps> = ({
                     <p className="text-xs text-slate-500 mt-1">
                       Turno: <strong>{c.shift}</strong> • Média Mínima: <strong>{c.passingGrade.toFixed(1)}</strong>
                     </p>
+
+                    {/* Term Periods Summary */}
+                    {c.termPeriods && c.termPeriods.length > 0 && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-100">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-indigo-500" />
+                          <span>Períodos dos {c.termType === 'bimestral' ? 'Bimestres' : 'Trimestres'}</span>
+                        </p>
+                        <div className="grid grid-cols-2 gap-1 text-[11px]">
+                          {c.termPeriods.map(p => (
+                            <span key={p.term} className="bg-slate-50 border border-slate-200/60 rounded px-1.5 py-0.5 text-slate-600 text-[10px] truncate" title={`${p.term}º: ${formatPeriodRange(p.startDate, p.endDate)}`}>
+                              <strong className="text-slate-800">{p.term}º:</strong> {formatPeriodRange(p.startDate, p.endDate)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                       <span className="text-slate-600 font-medium">

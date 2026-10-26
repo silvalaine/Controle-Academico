@@ -13,10 +13,16 @@ import {
   FileText,
   ExternalLink,
   Link as LinkIcon,
-  Filter
+  Filter,
+  AlertCircle
 } from 'lucide-react';
 import { ClassRoom, LessonContent, LessonStatus } from '../types';
-import { getTermLabel } from '../utils/calculations';
+import {
+  getTermLabel,
+  validateDateInTerm,
+  getTermForDate,
+  formatPeriodRange
+} from '../utils/calculations';
 import { generateLessonDiaryPDF } from '../utils/pdfGenerator';
 import { ConfirmModal } from './ConfirmModal';
 import { SchoolLogoSelector } from './SchoolLogoSelector';
@@ -34,6 +40,7 @@ interface LessonDiaryProps {
   onAddLesson: (newLesson: Omit<LessonContent, 'id'>) => void;
   onUpdateLesson: (lesson: LessonContent) => void;
   onDeleteLesson: (lessonId: string) => void;
+  onSelectTerm?: (term: number) => void;
 }
 
 export const LessonDiary: React.FC<LessonDiaryProps> = ({
@@ -42,7 +49,8 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
   selectedTerm,
   onAddLesson,
   onUpdateLesson,
-  onDeleteLesson
+  onDeleteLesson,
+  onSelectTerm
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTermOnly, setFilterTermOnly] = useState(true);
@@ -127,6 +135,9 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
     });
   };
 
+  // Detect term corresponding to the date entered in the form
+  const dateValidation = validateDateInTerm(date, selectedTerm, currentClass);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic.trim() || !contentDescription.trim()) return;
@@ -136,12 +147,14 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
       formattedLink = 'https://' + formattedLink;
     }
 
+    const termToSave = dateValidation.detectedTerm;
+
     if (editingLessonId) {
       onUpdateLesson({
         id: editingLessonId,
         classId: currentClass.id,
         date,
-        term: Number(selectedTerm),
+        term: termToSave,
         lessonCount: Number(lessonCount) || 1,
         topic: topic.trim(),
         contentDescription: contentDescription.trim(),
@@ -155,7 +168,7 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
       onAddLesson({
         classId: currentClass.id,
         date,
-        term: Number(selectedTerm),
+        term: termToSave,
         lessonCount: Number(lessonCount) || 1,
         topic: topic.trim(),
         contentDescription: contentDescription.trim(),
@@ -165,6 +178,11 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
         externalLinkTitle: externalLinkTitle.trim() || undefined,
         status
       });
+    }
+
+    // If lesson was registered into another term (e.g. October -> 4º Bimestre), auto-switch term view
+    if (termToSave !== selectedTerm && onSelectTerm) {
+      onSelectTerm(termToSave);
     }
 
     setIsModalOpen(false);
@@ -524,8 +542,35 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
                     max="6"
                     value={lessonCount}
                     onChange={(e) => setLessonCount(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
                   />
+                </div>
+
+                {/* Automatic Term Detection Feedback */}
+                <div className="col-span-2 p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <div className="text-xs">
+                        <span className="font-semibold text-slate-700">Etapa vinculada pela data: </span>
+                        <strong className="text-indigo-700 font-bold">{dateValidation.detectedTermLabel}</strong>
+                        {dateValidation.detectedPeriodRange && (
+                          <span className="text-[11px] text-indigo-500 ml-1.5">({dateValidation.detectedPeriodRange})</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-200/60 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                      Automático
+                    </span>
+                  </div>
+                  {!dateValidation.isExactMatch && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 p-1.5 rounded-md border border-amber-200 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>
+                        A data informada pertence ao <strong>{dateValidation.detectedTermLabel}</strong>. O diário será registrado e organizado automaticamente nesta etapa.
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
 

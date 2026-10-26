@@ -11,6 +11,12 @@ export interface AcademicYear {
   notes?: string;
 }
 
+export interface TermPeriod {
+  term: number; // 1, 2, 3, 4
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+}
+
 export interface ClassRoom {
   id: string;
   academicYearId: string;
@@ -24,6 +30,7 @@ export interface ClassRoom {
   termType: TermType;
   gradeCalculationType?: GradeCalculationType; // Aritmética simples, ponderada ou somatória
   annualRecoveryFormula?: AnnualRecoveryFormula; // Média aritmética, Substituição se maior, etc.
+  termPeriods?: TermPeriod[]; // Início e término de cada bimestre / trimestre
 }
 
 export type StudentStatus = 'active' | 'transferred' | 'canceled' | 'inactive';
