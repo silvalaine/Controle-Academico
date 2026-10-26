@@ -550,48 +550,84 @@ export const BookCorrectionTracker: React.FC<BookCorrectionTrackerProps> = ({
             </button>
           </div>
         ) : activeView === 'assignment' && currentAssignment ? (
-          <div>
-            {/* Assignment Selector Carousel / Bar */}
-            <div className="p-4 bg-indigo-50/50 border-b border-indigo-100/80">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
-                      Selecionar Atividade:
+          <div className="w-full">
+            {/* Assignment Selector & Controls Bar */}
+            <div className="p-4 bg-indigo-50/60 border-b border-indigo-100/90 w-full">
+              <div className="flex flex-col gap-3 w-full">
+                {/* Top Row: Dropdown selector + Action Buttons (ALWAYS visible, never cut off) */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 w-full">
+                  <div className="flex items-center gap-2 flex-1 min-w-0 max-w-full">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide shrink-0">
+                      Atividade:
                     </span>
                     <select
                       value={currentAssignment.id}
                       onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                      className="bg-white border border-indigo-200 rounded-lg px-2.5 py-1 text-xs font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full max-w-md truncate cursor-pointer shadow-2xs"
                     >
-                      {classAssignments.map(a => (
-                        <option key={a.id} value={a.id}>
-                          {a.unitOrChapter} ({a.bookTitle}) - {a.pages}
-                        </option>
-                      ))}
+                      {classAssignments.map(a => {
+                        const label = `${a.unitOrChapter} (${a.bookTitle}) - ${a.pages}`;
+                        return (
+                          <option key={a.id} value={a.id}>
+                            {label.length > 75 ? label.slice(0, 75) + '...' : label}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
-                  {/* Details Card */}
-                  <div className="bg-white rounded-xl p-3.5 border border-indigo-100/90 shadow-2xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-100">
-                      <div>
-                        <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                          <span>{currentAssignment.bookTitle}</span>
-                          <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                            {getTermLabel(currentClass.termType, currentAssignment.term)}
-                          </span>
+                  {/* Prominent Action Buttons: Editar, Excluir, Marcar Todos */}
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(currentAssignment)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-900 border border-indigo-200 rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer"
+                      title="Editar esta atividade de livro"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Editar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentToDelete(currentAssignment)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-900 border border-rose-200 rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer"
+                      title="Excluir esta atividade de livro"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Excluir</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleMarkAllComplete}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer"
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      <span>Marcar Todos c/ Visto</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Details Card with Full Word Wrapping */}
+                <div className="bg-white rounded-xl p-4 border border-indigo-100/90 shadow-2xs w-full overflow-hidden">
+                  <div className="flex flex-col gap-1.5 pb-2.5 mb-2.5 border-b border-slate-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                        <h4 className="text-sm font-black text-slate-900 break-words max-w-full">
+                          {currentAssignment.bookTitle}
                         </h4>
-                        <p className="text-xs font-semibold text-indigo-700 mt-0.5">
-                          {currentAssignment.unitOrChapter} • <strong className="text-slate-800">{currentAssignment.pages}</strong>
-                        </p>
+                        <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">
+                          {getTermLabel(currentClass.termType, currentAssignment.term)}
+                        </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      {/* Secondary quick edit/delete buttons inside card */}
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleOpenEdit(currentAssignment)}
-                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                           title="Editar atividade de livro"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -599,7 +635,7 @@ export const BookCorrectionTracker: React.FC<BookCorrectionTrackerProps> = ({
                         <button
                           type="button"
                           onClick={() => setAssignmentToDelete(currentAssignment)}
-                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                           title="Excluir atividade"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -607,45 +643,37 @@ export const BookCorrectionTracker: React.FC<BookCorrectionTrackerProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        Solicitado: <strong>{currentAssignment.assignedDate.split('-').reverse().join('/')}</strong>
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                        Data Correção: <strong className="text-indigo-700">{currentAssignment.dueDate.split('-').reverse().join('/')}</strong>
-                      </span>
-                      {currentAssignment.maxScore && (
-                        <>
-                          <span>•</span>
-                          <span className="flex items-center gap-1 font-bold text-emerald-700">
-                            <Award className="w-3.5 h-3.5 text-emerald-600" />
-                            Nota Máxima: {currentAssignment.maxScore.toFixed(1)} pts
-                          </span>
-                        </>
-                      )}
-                    </div>
+                    <p className="text-xs font-semibold text-indigo-700 break-words whitespace-normal leading-relaxed">
+                      {currentAssignment.unitOrChapter} • <strong className="text-slate-800">{currentAssignment.pages}</strong>
+                    </p>
+                  </div>
 
-                    {currentAssignment.description && (
-                      <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        {currentAssignment.description}
-                      </p>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Solicitado: <strong>{currentAssignment.assignedDate.split('-').reverse().join('/')}</strong></span>
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span>Data Correção: <strong className="text-indigo-700">{currentAssignment.dueDate.split('-').reverse().join('/')}</strong></span>
+                    </span>
+                    {currentAssignment.maxScore && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 font-bold text-emerald-700">
+                          <Award className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Nota Máxima: {currentAssignment.maxScore.toFixed(1)} pts</span>
+                        </span>
+                      </>
                     )}
                   </div>
-                </div>
 
-                {/* Mass Actions */}
-                <div className="flex flex-row lg:flex-col gap-2 shrink-0 self-end lg:self-center">
-                  <button
-                    type="button"
-                    onClick={handleMarkAllComplete}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer"
-                  >
-                    <CheckCheck className="w-4 h-4" />
-                    <span>Marcar Todos c/ Visto</span>
-                  </button>
+                  {currentAssignment.description && (
+                    <div className="mt-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-xs text-slate-600 break-words whitespace-pre-line leading-relaxed">
+                      {currentAssignment.description}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -749,10 +777,29 @@ export const BookCorrectionTracker: React.FC<BookCorrectionTrackerProps> = ({
                   <th className="py-2.5 px-4 min-w-[200px] sticky left-12 bg-slate-50 z-10 border-r border-slate-200">Nome do Aluno</th>
                   <th className="py-2.5 px-3 text-center w-28 border-r border-slate-200">Progresso</th>
                   {classAssignments.map(a => (
-                    <th key={a.id} className="py-2.5 px-3 min-w-[140px] text-center border-r border-slate-200">
+                    <th key={a.id} className="py-2.5 px-3 min-w-[150px] text-center border-r border-slate-200">
                       <div className="font-bold text-slate-800 truncate" title={a.bookTitle}>{a.bookTitle}</div>
                       <div className="text-[10px] text-indigo-600 font-semibold truncate" title={a.unitOrChapter}>{a.unitOrChapter}</div>
                       <div className="text-[10px] text-slate-400 font-normal">{a.pages}</div>
+                      <div className="flex items-center justify-center gap-1.5 mt-1.5 pt-1 border-t border-slate-200/60">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(a)}
+                          className="px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded transition cursor-pointer"
+                          title="Editar atividade"
+                        >
+                          Editar
+                        </button>
+                        <span className="text-slate-300">•</span>
+                        <button
+                          type="button"
+                          onClick={() => setAssignmentToDelete(a)}
+                          className="px-1.5 py-0.5 text-[10px] font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded transition cursor-pointer"
+                          title="Excluir atividade"
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </th>
                   ))}
                 </tr>
