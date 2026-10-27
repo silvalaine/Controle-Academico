@@ -1604,11 +1604,26 @@ export function generateBookCorrectionReportPDF(options: {
     23
   );
 
-  // Assignment details box
+  // Assignment details box with dynamic height for student instructions / observations
   const boxY = 27;
+  const hasDesc = !!(assignment.description && assignment.description.trim());
+  let descLines: string[] = [];
+  let descBoxHeight = 0;
+
+  if (hasDesc) {
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    // Wrap text to width 174 mm (182mm box width - 8mm internal margin)
+    descLines = doc.splitTextToSize(assignment.description!.trim(), 174);
+    // Title (4.5mm) + description lines (3.3mm per line) + padding
+    descBoxHeight = 6 + (descLines.length * 3.3) + 3;
+  }
+
+  const totalBoxHeight = 16.5 + (hasDesc ? descBoxHeight : 0);
+
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, boxY, 182, 17, 2, 2, 'FD');
+  doc.roundedRect(14, boxY, 182, totalBoxHeight, 2, 2, 'FD');
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
@@ -1617,7 +1632,7 @@ export function generateBookCorrectionReportPDF(options: {
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
-  doc.text(`Etapa / Páginas: ${assignment.unitOrChapter} (${assignment.pages})`, 17, boxY + 10);
+  doc.text(`Etapa / Páginas: ${assignment.unitOrChapter} (${assignment.pages})`, 17, boxY + 9.5);
 
   const dateInfo = `Solicitado em: ${assignment.assignedDate.split('-').reverse().join('/')} | Data da Correção: ${assignment.dueDate.split('-').reverse().join('/')}`;
   doc.text(dateInfo, 17, boxY + 14);
@@ -1626,6 +1641,23 @@ export function generateBookCorrectionReportPDF(options: {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(79, 70, 229);
     doc.text(`Pontuação Máxima: ${assignment.maxScore.toFixed(1)} pts`, 140, boxY + 14);
+  }
+
+  if (hasDesc) {
+    // Subtle separator line
+    doc.setDrawColor(226, 232, 240);
+    doc.line(17, boxY + 16, 193, boxY + 16);
+
+    // Section title
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(67, 56, 202); // indigo-700
+    doc.text('Orientações para os Alunos / Exercícios Específicos:', 17, boxY + 20.5);
+
+    // Description text
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85); // slate-700
+    doc.text(descLines, 17, boxY + 24.5);
   }
 
   const activeStudents = students
@@ -1665,7 +1697,7 @@ export function generateBookCorrectionReportPDF(options: {
   autoTable(doc, {
     head,
     body,
-    startY: boxY + 20,
+    startY: boxY + totalBoxHeight + 3.5,
     theme: 'grid',
     styles: {
       fontSize: 8,

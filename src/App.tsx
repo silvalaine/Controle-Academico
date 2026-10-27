@@ -552,14 +552,16 @@ export default function App() {
     };
     setData(prev => ({
       ...prev,
-      bookAssignments: [...(prev.bookAssignments || []), item]
+      bookAssignments: [...(prev.bookAssignments || []), item],
+      lastModified: Date.now()
     }));
   };
 
   const handleUpdateBookAssignment = (updatedAssignment: BookAssignment) => {
     setData(prev => ({
       ...prev,
-      bookAssignments: (prev.bookAssignments || []).map(b => (b.id === updatedAssignment.id ? updatedAssignment : b))
+      bookAssignments: (prev.bookAssignments || []).map(b => (b.id === updatedAssignment.id ? updatedAssignment : b)),
+      lastModified: Date.now()
     }));
   };
 
@@ -567,7 +569,8 @@ export default function App() {
     setData(prev => ({
       ...prev,
       bookAssignments: (prev.bookAssignments || []).filter(b => b.id !== assignmentId),
-      studentBookChecks: (prev.studentBookChecks || []).filter(c => c.bookAssignmentId !== assignmentId)
+      studentBookChecks: (prev.studentBookChecks || []).filter(c => c.bookAssignmentId !== assignmentId),
+      lastModified: Date.now()
     }));
   };
 
@@ -584,7 +587,8 @@ export default function App() {
       }
       return {
         ...prev,
-        studentBookChecks: nextList
+        studentBookChecks: nextList,
+        lastModified: Date.now()
       };
     });
   };
@@ -604,7 +608,8 @@ export default function App() {
       });
       return {
         ...prev,
-        studentBookChecks: current
+        studentBookChecks: current,
+        lastModified: Date.now()
       };
     });
   };

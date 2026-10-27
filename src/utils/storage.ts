@@ -238,6 +238,8 @@ export function resetToSampleData(): AppDataState {
     observations: initialObservations,
     incidents: initialIncidents,
     incidentTypes: initialIncidentTypes,
+    bookAssignments: initialBookAssignments,
+    studentBookChecks: initialStudentBookChecks,
     selectedYearId: defaultYear.id,
     selectedClassId: defaultClass.id,
     selectedTerm: 1,

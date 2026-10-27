@@ -57,6 +57,10 @@ export async function uploadBackupToGoogleDrive(
     observations: data.observations || [],
     incidents: data.incidents || [],
     incidentTypes: data.incidentTypes || [],
+    bookAssignments: data.bookAssignments || [],
+    studentBookChecks: data.studentBookChecks || [],
+    totalBooks: data.bookAssignments?.length || 0,
+    totalBookChecks: data.studentBookChecks?.length || 0,
     selectedYearId: data.selectedYearId,
     selectedClassId: data.selectedClassId,
     selectedTerm: data.selectedTerm,
@@ -67,7 +71,7 @@ export async function uploadBackupToGoogleDrive(
   const metadata = {
     name: filename,
     mimeType: 'application/json',
-    description: `Backup do Diário do Professor gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR')}. Contém ${data.classes?.length || 0} turmas, ${data.students?.length || 0} alunos e ${registeredUsers.length} usuários/professores.`
+    description: `Backup do Diário do Professor gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR')}. Contém ${data.classes?.length || 0} turmas, ${data.students?.length || 0} alunos, ${data.bookAssignments?.length || 0} atividades de livros e ${registeredUsers.length} usuários/professores.`
   };
 
   const boundary = '-------314159265358979323846';
@@ -202,6 +206,8 @@ export async function downloadBackupFromGoogleDrive(
     observations: Array.isArray(parsed.observations) ? parsed.observations : [],
     incidents: Array.isArray(parsed.incidents) ? parsed.incidents : [],
     incidentTypes: Array.isArray(parsed.incidentTypes) ? parsed.incidentTypes : [],
+    bookAssignments: Array.isArray(parsed.bookAssignments) ? parsed.bookAssignments : [],
+    studentBookChecks: Array.isArray(parsed.studentBookChecks) ? parsed.studentBookChecks : [],
     selectedYearId: parsed.selectedYearId || parsed.academicYears?.[0]?.id || '',
     selectedClassId: parsed.selectedClassId || parsed.classes?.[0]?.id || '',
     selectedTerm: typeof parsed.selectedTerm === 'number' ? parsed.selectedTerm : 1,

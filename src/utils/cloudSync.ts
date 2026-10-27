@@ -99,6 +99,8 @@ export function getEducationalDataSignature(state: AppDataState): string {
       fr: (state.finalRecoveries || []).length,
       o: (state.observations || []).length,
       i: (state.incidents || []).length,
+      bk: (state.bookAssignments || []).length,
+      bkc: (state.studentBookChecks || []).length,
       dc: state.deletedClassIds || [],
       ds: state.deletedStudentIds || [],
       dy: state.deletedYearIds || []
@@ -455,6 +457,8 @@ export function validateAndSanitizeAppState(raw: any, fallback: AppDataState): A
     observations: Array.isArray(raw.observations) ? raw.observations : fallback.observations,
     incidents: Array.isArray(raw.incidents) ? raw.incidents : fallback.incidents,
     incidentTypes: Array.isArray(raw.incidentTypes) ? raw.incidentTypes : fallback.incidentTypes,
+    bookAssignments: Array.isArray(raw.bookAssignments) ? raw.bookAssignments : (fallback.bookAssignments || []),
+    studentBookChecks: Array.isArray(raw.studentBookChecks) ? raw.studentBookChecks : (fallback.studentBookChecks || []),
     selectedYearId: safeYearId,
     selectedClassId: safeClassId,
     selectedTerm: typeof raw.selectedTerm === 'number' ? raw.selectedTerm : fallback.selectedTerm,

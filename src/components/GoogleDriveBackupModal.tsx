@@ -13,7 +13,8 @@ import {
   Database,
   Calendar,
   Layers,
-  Users
+  Users,
+  BookOpen
 } from 'lucide-react';
 import { AppDataState } from '../utils/storage';
 import {
@@ -288,7 +289,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                   <Database className="w-3.5 h-3.5 text-indigo-500" />
                   <span>Resumo dos Dados Atuais a Serem Salvos</span>
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
                   <div className="p-2.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs">
                     <span className="text-lg font-black text-slate-800 block">{data.classes?.length || 0}</span>
                     <span className="text-[11px] text-slate-500 font-medium flex items-center justify-center gap-1">
@@ -309,6 +310,12 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                     <span className="text-lg font-black text-slate-800 block">{data.lessons?.length || 0}</span>
                     <span className="text-[11px] text-slate-500 font-medium flex items-center justify-center gap-1">
                       <Calendar className="w-3 h-3 text-amber-400" /> Aulas dadas
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs col-span-2 sm:col-span-1">
+                    <span className="text-lg font-black text-purple-700 block">{data.bookAssignments?.length || 0}</span>
+                    <span className="text-[11px] text-slate-500 font-medium flex items-center justify-center gap-1">
+                      <BookOpen className="w-3 h-3 text-purple-500" /> Livros/Vistos
                     </span>
                   </div>
                 </div>
@@ -468,7 +475,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Você está prestes a restaurar o backup <strong>"{confirmRestoreFile.name}"</strong>. Os dados atuais deste aparelho serão atualizados com as turmas, alunos, notas e frequências gravados nesse backup.
+              Você está prestes a restaurar o backup <strong>"{confirmRestoreFile.name}"</strong>. Os dados atuais deste aparelho serão atualizados com as turmas, alunos, notas, frequências, ocorrências e correções de livros gravados nesse backup.
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2">
