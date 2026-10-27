@@ -664,8 +664,9 @@ export default function App() {
   const handleAddClass = (newClass: Omit<ClassRoom, 'id'>) => {
     const id = `class-${Date.now()}`;
     clearDeletedId('class', id);
+    let nextState: AppDataState;
     setData(prev => {
-      const nextState: AppDataState = {
+      nextState = {
         ...prev,
         classes: [...prev.classes, { ...newClass, id }],
         selectedClassId: id,
@@ -675,12 +676,18 @@ export default function App() {
       saveStoredData(nextState);
       return nextState;
     });
+    if (!isQuotaCurrentlyBlocked()) {
+      autoPushDataToCloud(nextState!, currentUser, syncEmail, true).catch(err => {
+        console.warn('Falha ao sincronizar nova turma:', err);
+      });
+    }
   };
 
   const handleUpdateClass = (updatedClass: ClassRoom) => {
+    let nextState: AppDataState;
     setData(prev => {
       const nextClasses = prev.classes.map(c => (c.id === updatedClass.id ? updatedClass : c));
-      const nextState: AppDataState = {
+      nextState = {
         ...prev,
         classes: nextClasses,
         lastModified: Date.now()
@@ -694,6 +701,13 @@ export default function App() {
     });
     setTimeout(() => setSyncToast(null), 4000);
     setEditingClassModal(null);
+
+    // Push immediately to the cloud so term periods are saved to Firestore without delay
+    if (!isQuotaCurrentlyBlocked()) {
+      autoPushDataToCloud(nextState!, currentUser, syncEmail, true).catch(err => {
+        console.warn('Falha na sincronização da turma atualizada:', err);
+      });
+    }
   };
 
   const handleDeleteClass = (classId: string) => {

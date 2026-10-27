@@ -42,7 +42,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (classRoom) {
+    if (isOpen && classRoom) {
       setName(classRoom.name || '');
       setSubject(classRoom.subject || '');
       setGradeLevel(classRoom.gradeLevel || 'Ensino Fundamental');
@@ -53,10 +53,14 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       setPassingRecoveryGrade(typeof classRoom.passingRecoveryGrade === 'number' ? classRoom.passingRecoveryGrade : 5.0);
       setAnnualRecoveryFormula(classRoom.annualRecoveryFormula || 'rec_final_direta');
       const yr = academicYears.find(y => y.id === classRoom.academicYearId)?.year || 2026;
-      setTermPeriods(classRoom.termPeriods && classRoom.termPeriods.length > 0 ? classRoom.termPeriods : getDefaultTermPeriods(classRoom.termType || 'bimestral', yr));
+      setTermPeriods(
+        classRoom.termPeriods && classRoom.termPeriods.length > 0
+          ? classRoom.termPeriods
+          : getDefaultTermPeriods(classRoom.termType || 'bimestral', yr)
+      );
       setError(null);
     }
-  }, [classRoom, academicYears]);
+  }, [isOpen, classRoom?.id]);
 
   if (!isOpen || !classRoom) return null;
 
@@ -223,7 +227,12 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
               </label>
               <select
                 value={termType}
-                onChange={(e) => setTermType(e.target.value as TermType)}
+                onChange={(e) => {
+                  const newType = e.target.value as TermType;
+                  setTermType(newType);
+                  const yr = academicYears.find(y => y.id === academicYearId)?.year || 2026;
+                  setTermPeriods(getDefaultTermPeriods(newType, yr));
+                }}
                 className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700"
               >
                 <option value="bimestral">Bimestral (4 Bimestres)</option>

@@ -1065,7 +1065,12 @@ export const ManagementModal: React.FC<ManagementProps> = ({
                   </label>
                   <select
                     value={classTermType}
-                    onChange={(e) => setClassTermType(e.target.value as TermType)}
+                    onChange={(e) => {
+                      const newType = e.target.value as TermType;
+                      setClassTermType(newType);
+                      const yr = academicYears.find(y => y.id === (classAcademicYearId || selectedYearId))?.year || 2026;
+                      setClassTermPeriods(getDefaultTermPeriods(newType, yr));
+                    }}
                     className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700"
                   >
                     <option value="bimestral">Bimestral (4 Bimestres)</option>

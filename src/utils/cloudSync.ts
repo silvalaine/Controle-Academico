@@ -89,7 +89,13 @@ export function isQuotaCurrentlyBlocked(): boolean {
 export function getEducationalDataSignature(state: AppDataState): string {
   try {
     return JSON.stringify({
-      c: (state.classes || []).map(c => [c.id, c.name, c.shift]),
+      c: (state.classes || []).map(c => [
+        c.id,
+        c.name,
+        c.shift,
+        c.termType,
+        (c.termPeriods || []).map(p => `${p.term}:${p.startDate}_${p.endDate}`).join('|')
+      ]),
       s: (state.students || []).map(s => [s.id, s.name, s.classId]),
       a: (state.assessments || []).length,
       g: (state.gradeRecords || []).length,
@@ -185,7 +191,14 @@ export function sanitizeClasses(classes: any[]): ClassRoom[] {
         : 'aritmetica') as any,
       annualRecoveryFormula: (['media_simples', 'maior_nota', 'ponderada_final'].includes(c.annualRecoveryFormula)
         ? c.annualRecoveryFormula
-        : 'rec_final_direta') as any
+        : 'rec_final_direta') as any,
+      termPeriods: Array.isArray(c.termPeriods) && c.termPeriods.length > 0
+        ? c.termPeriods.map((p: any) => ({
+            term: Number(p.term),
+            startDate: String(p.startDate || ''),
+            endDate: String(p.endDate || '')
+          }))
+        : undefined
     }));
 }
 
@@ -234,8 +247,19 @@ export function mergeAppState(local: AppDataState, remote: AppDataState): AppDat
     }
   });
   sanitizeClasses(remote.classes || []).forEach(c => {
-    if (!deletedClassIds.has(c.id) && !classesMap.has(c.id)) {
-      classesMap.set(c.id, c);
+    if (!deletedClassIds.has(c.id)) {
+      if (!classesMap.has(c.id)) {
+        classesMap.set(c.id, c);
+      } else {
+        // If local doesn't have termPeriods but remote does, retain remote's termPeriods
+        const localClass = classesMap.get(c.id)!;
+        if ((!localClass.termPeriods || localClass.termPeriods.length === 0) && c.termPeriods && c.termPeriods.length > 0) {
+          classesMap.set(c.id, {
+            ...localClass,
+            termPeriods: c.termPeriods
+          });
+        }
+      }
     }
   });
   const classes = Array.from(classesMap.values());
