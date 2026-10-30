@@ -9,7 +9,8 @@ import {
   Users,
   CheckCircle2,
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  UserCircle
 } from 'lucide-react';
 import {
   ClassRoom,
@@ -451,8 +452,17 @@ export const ClassDiaryReport: React.FC<ClassDiaryReportProps> = ({
                         <td className="py-1.5 px-2.5 font-mono text-[11px] text-slate-600 border-r border-slate-300">
                           {student.enrollmentNumber || '—'}
                         </td>
-                        <td className="py-1.5 px-3 font-medium text-slate-900 border-r border-slate-300">
-                          {student.name}
+                        <td className="py-1 px-3 font-medium text-slate-900 border-r border-slate-300">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center">
+                              {student.photoUrl ? (
+                                <img src={student.photoUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <UserCircle className="w-4 h-4 text-slate-400" />
+                              )}
+                            </div>
+                            <span className="truncate">{student.name}</span>
+                          </div>
                         </td>
                         {distinctDates.map((d, dIdx) => {
                           const status = dateMap[d];

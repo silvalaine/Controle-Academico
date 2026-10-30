@@ -1057,7 +1057,7 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
                         <td className="py-2 px-3 font-medium text-slate-900 border-r border-slate-300">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <div className="w-6 h-6 rounded-full overflow-hidden bg-indigo-50 border border-slate-200 shrink-0 flex items-center justify-center print:hidden">
+                              <div className="w-6 h-6 rounded-full overflow-hidden bg-indigo-50 border border-slate-200 shrink-0 flex items-center justify-center">
                                 {student.photoUrl ? (
                                   <img src={student.photoUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (

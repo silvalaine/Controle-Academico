@@ -429,11 +429,31 @@ export function generateAttendanceReportPDF(
     },
     didParseCell: (data) => {
       if (data.section === 'body') {
+        if (data.column.index === 2) {
+          const student = activeStudents[data.row.index];
+          if (student?.photoUrl) {
+            data.cell.styles.cellPadding = { top: 1.5, bottom: 1.5, left: 8.5, right: 2 };
+          }
+        }
         const text = String(data.cell.raw);
         if (text === 'Regular') {
           data.cell.styles.textColor = [16, 185, 129];
         } else if (text === 'Risco (<75%)') {
           data.cell.styles.textColor = [225, 29, 72];
+        }
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section === 'body' && data.column.index === 2) {
+        const student = activeStudents[data.row.index];
+        if (student?.photoUrl) {
+          try {
+            const imgSize = 5.2;
+            const imgX = data.cell.x + 1.5;
+            const imgY = data.cell.y + (data.cell.height - imgSize) / 2;
+            const format = student.photoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            doc.addImage(student.photoUrl, format, imgX, imgY, imgSize, imgSize);
+          } catch (_) {}
         }
       }
     }
@@ -974,6 +994,28 @@ export function generateStudentListPDF(
       0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
       1: { cellWidth: 24, halign: 'center' },
       2: { cellWidth: mode === 'chamada' ? 55 : 65 }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 2) {
+        const student = filteredStudents[data.row.index];
+        if (student?.photoUrl) {
+          data.cell.styles.cellPadding = { top: 1.5, bottom: 1.5, left: 8.5, right: 2 };
+        }
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section === 'body' && data.column.index === 2) {
+        const student = filteredStudents[data.row.index];
+        if (student?.photoUrl) {
+          try {
+            const imgSize = 5.2;
+            const imgX = data.cell.x + 1.5;
+            const imgY = data.cell.y + (data.cell.height - imgSize) / 2;
+            const format = student.photoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            doc.addImage(student.photoUrl, format, imgX, imgY, imgSize, imgSize);
+          } catch (_) {}
+        }
+      }
     }
   });
 
@@ -1396,6 +1438,28 @@ export function generateClassDiaryAttendanceAndLessonsPDF(
       }, {}),
       [faltasColIdx]: { cellWidth: faltasWidth, halign: 'center' },
       [freqColIdx]: { cellWidth: freqWidth, halign: 'center', fontStyle: 'bold' }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 1) {
+        const student = activeStudents[data.row.index];
+        if (student?.photoUrl) {
+          data.cell.styles.cellPadding = { top: 1, bottom: 1, left: 6.5, right: 1 };
+        }
+      }
+    },
+    didDrawCell: (data) => {
+      if (data.section === 'body' && data.column.index === 1) {
+        const student = activeStudents[data.row.index];
+        if (student?.photoUrl) {
+          try {
+            const imgSize = 4.2;
+            const imgX = data.cell.x + 1;
+            const imgY = data.cell.y + (data.cell.height - imgSize) / 2;
+            const format = student.photoUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            doc.addImage(student.photoUrl, format, imgX, imgY, imgSize, imgSize);
+          } catch (_) {}
+        }
+      }
     }
   });
 

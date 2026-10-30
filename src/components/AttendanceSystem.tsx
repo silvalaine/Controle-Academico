@@ -10,7 +10,8 @@ import {
   FileSpreadsheet,
   FileText,
   AlertTriangle,
-  Trash2
+  Trash2,
+  UserCircle
 } from 'lucide-react';
 import {
   ClassRoom,
@@ -433,9 +434,17 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
                     className="p-3.5 hover:bg-slate-50/80 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-bold">
+                      <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
                         {String(student.rollNumber).padStart(2, '0')}
                       </span>
+                      {/* Foto pequena do aluno */}
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-indigo-50 border border-slate-200 shrink-0 flex items-center justify-center shadow-2xs">
+                        {student.photoUrl ? (
+                          <img src={student.photoUrl} alt={student.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <UserCircle className="w-6 h-6 text-indigo-300" />
+                        )}
+                      </div>
                       <div>
                         <h4 className="text-sm font-semibold text-slate-800">
                           {student.name}
@@ -541,8 +550,17 @@ export const AttendanceSystem: React.FC<AttendanceSystemProps> = ({
                       <td className="py-3 px-3 text-center font-bold text-slate-500">
                         {String(student.rollNumber).padStart(2, '0')}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
-                        {student.name}
+                      <td className="py-2.5 px-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full overflow-hidden bg-indigo-50 border border-slate-200 shrink-0 flex items-center justify-center shadow-2xs">
+                            {student.photoUrl ? (
+                              <img src={student.photoUrl} alt={student.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <UserCircle className="w-4 h-4 text-indigo-300" />
+                            )}
+                          </div>
+                          <span>{student.name}</span>
+                        </div>
                       </td>
                       <td className="py-3 px-3 text-center text-slate-600 font-medium">
                         {att.totalClasses}
