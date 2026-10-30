@@ -96,7 +96,7 @@ export function getEducationalDataSignature(state: AppDataState): string {
         c.termType,
         (c.termPeriods || []).map(p => `${p.term}:${p.startDate}_${p.endDate}`).join('|')
       ]),
-      s: (state.students || []).map(s => [s.id, s.name, s.classId]),
+      s: (state.students || []).map(s => [s.id, s.name, s.classId, s.photoUrl ? s.photoUrl.length : 0]),
       a: (state.assessments || []).length,
       g: (state.gradeRecords || []).length,
       att: (state.attendances || []).length,
@@ -272,8 +272,15 @@ export function mergeAppState(local: AppDataState, remote: AppDataState): AppDat
     }
   });
   (remote.students || []).forEach(s => {
-    if (s && s.id && !deletedStudentIds.has(s.id) && !deletedClassIds.has(s.classId) && !studentsMap.has(s.id)) {
-      studentsMap.set(s.id, s);
+    if (s && s.id && !deletedStudentIds.has(s.id) && !deletedClassIds.has(s.classId)) {
+      if (!studentsMap.has(s.id)) {
+        studentsMap.set(s.id, s);
+      } else {
+        const localStudent = studentsMap.get(s.id)!;
+        if (!localStudent.photoUrl && s.photoUrl) {
+          studentsMap.set(s.id, { ...localStudent, photoUrl: s.photoUrl });
+        }
+      }
     }
   });
   const students = Array.from(studentsMap.values());

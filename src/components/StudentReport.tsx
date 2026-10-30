@@ -12,7 +12,8 @@ import {
   GraduationCap,
   Sparkles,
   BookOpen,
-  Users
+  Users,
+  UserCircle
 } from 'lucide-react';
 import {
   ClassRoom,
@@ -386,31 +387,40 @@ export const StudentReport: React.FC<StudentReportProps> = ({
         )}
 
         {/* Student Identification Profile */}
-        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase block">Nome do Aluno</span>
-            <p className="text-sm font-bold text-slate-900 mt-0.5">{student.name}</p>
-          </div>
-
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase block">Nº de Chamada & Matrícula</span>
-            <p className="font-semibold text-slate-800 mt-0.5">
-              Nº {String(student.rollNumber).padStart(2, '0')} • Matrícula {student.enrollmentNumber}
-            </p>
-          </div>
-
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase block">Responsável Legal</span>
-            <p className="font-medium text-slate-700 mt-0.5 flex items-center gap-1">
-              {student.guardianName || 'Não informado'}
-            </p>
-            {student.guardianPhone && (
-              <span className="text-[10px] text-slate-500 flex items-center gap-0.5 mt-0.5">
-                <Phone className="w-3 h-3 text-slate-400" />
-                {student.guardianPhone}
-              </span>
+        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs">
+          <div className="w-14 h-14 rounded-xl overflow-hidden bg-white border border-slate-200 shrink-0 flex items-center justify-center shadow-2xs">
+            {student.photoUrl ? (
+              <img src={student.photoUrl} alt={student.name} className="w-full h-full object-cover" />
+            ) : (
+              <UserCircle className="w-9 h-9 text-indigo-300" />
             )}
           </div>
+
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Nome do Aluno</span>
+              <p className="text-sm font-bold text-slate-900 mt-0.5">{student.name}</p>
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Nº de Chamada & Matrícula</span>
+              <p className="font-semibold text-slate-800 mt-0.5">
+                Nº {String(student.rollNumber).padStart(2, '0')} • Matrícula {student.enrollmentNumber}
+              </p>
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Responsável Legal</span>
+              <p className="font-medium text-slate-700 mt-0.5 flex items-center gap-1">
+                {student.guardianName || 'Não informado'}
+              </p>
+              {student.guardianPhone && (
+                <span className="text-[10px] text-slate-500 flex items-center gap-0.5 mt-0.5">
+                  <Phone className="w-3 h-3 text-slate-400" />
+                  {student.guardianPhone}
+                </span>
+              )}
+            </div>
 
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase block">Situação Geral</span>
@@ -443,6 +453,7 @@ export const StudentReport: React.FC<StudentReportProps> = ({
             </div>
           </div>
         </div>
+      </div>
 
         {/* KPI Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

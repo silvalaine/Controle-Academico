@@ -1000,6 +1000,208 @@ export function generateStudentListPDF(
 }
 
 /**
+ * Generates and downloads the Caródromo / Carômetro PDF
+ * (Painel oficial com fotos, nomes, números de chamada e matrículas de todos os estudantes)
+ */
+export function generateCarodromoPDF(
+  currentClass: ClassRoom,
+  students: Student[],
+  options?: {
+    schoolName?: string;
+    schoolLogo?: string | null;
+    includeLogo?: boolean;
+    onlyActive?: boolean;
+    customTitle?: string;
+  }
+): void {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 14;
+  const topMargin = 33;
+
+  const shouldIncludeLogo = options?.includeLogo !== undefined ? options.includeLogo : getIncludeSchoolLogoPreference();
+  const activeLogo = shouldIncludeLogo ? (options?.schoolLogo !== undefined ? options.schoolLogo : getSchoolLogo()) : null;
+  const activeSchoolName = options?.schoolName || getSchoolName();
+
+  const filteredStudents = students
+    .filter(s => s.classId === currentClass.id && (options?.onlyActive !== false ? s.status === 'active' : true))
+    .sort((a, b) => a.rollNumber - b.rollNumber);
+
+  // 4 columns x 4 rows = 16 students per page
+  const cols = 4;
+  const rows = 4;
+  const studentsPerPage = cols * rows;
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / studentsPerPage));
+
+  const gapX = 4;
+  const gapY = 4.5;
+  const availableWidth = pageWidth - (marginX * 2);
+  const cardWidth = (availableWidth - (gapX * (cols - 1))) / cols; // ~42.5mm
+  const cardHeight = 54; // mm
+
+  const drawPlaceholder = (targetDoc: jsPDF, student: Student, x: number, y: number, size: number) => {
+    targetDoc.setFillColor(241, 245, 249);
+    targetDoc.setDrawColor(203, 213, 225);
+    targetDoc.setLineWidth(0.2);
+    targetDoc.roundedRect(x, y, size, size, 2, 2, 'FD');
+
+    const initials = student.name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(p => p[0].toUpperCase())
+      .join('');
+
+    targetDoc.setFontSize(10);
+    targetDoc.setFont('helvetica', 'bold');
+    targetDoc.setTextColor(99, 102, 241); // indigo-500
+    targetDoc.text(initials || `Nº ${student.rollNumber}`, x + size / 2, y + size / 2 + 1.5, { align: 'center' });
+
+    targetDoc.setFontSize(5.5);
+    targetDoc.setFont('helvetica', 'normal');
+    targetDoc.setTextColor(148, 163, 184);
+    targetDoc.text('Sem foto', x + size / 2, y + size - 2, { align: 'center' });
+  };
+
+  const drawHeader = (pageNumber: number) => {
+    // Header banner
+    doc.setFillColor(30, 41, 59); // Slate-800
+    doc.rect(0, 0, pageWidth, 25, 'F');
+
+    let textX = marginX;
+    if (activeLogo) {
+      const logoRes = drawSchoolLogoInPDF(doc, activeLogo, marginX, 3.5, 18, 18);
+      if (logoRes.width > 0) {
+        textX = marginX + logoRes.width + 4;
+      }
+    }
+
+    let textY = 8;
+    if (activeSchoolName && activeSchoolName.trim()) {
+      doc.setTextColor(251, 191, 36); // Amber-400
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(activeSchoolName.trim().toUpperCase(), textX, textY);
+      textY += 4.5;
+    }
+
+    const headerTitle = (options?.customTitle || 'CARÓDROMO DA TURMA - FOTOS DOS ESTUDANTES').toUpperCase();
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(headerTitle, textX, textY);
+
+    textY += 4.5;
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(226, 232, 240);
+    doc.text(
+      `Turma: ${currentClass.name} | Disciplina: ${currentClass.subject} | Turno: ${currentClass.shift} | Total: ${filteredStudents.length} Estudantes | Página ${pageNumber} de ${totalPages}`,
+      textX,
+      textY
+    );
+  };
+
+  for (let page = 0; page < totalPages; page++) {
+    if (page > 0) {
+      doc.addPage();
+    }
+    drawHeader(page + 1);
+
+    const startIdx = page * studentsPerPage;
+    const pageStudents = filteredStudents.slice(startIdx, startIdx + studentsPerPage);
+
+    pageStudents.forEach((student, idx) => {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+
+      const cardX = marginX + col * (cardWidth + gapX);
+      const cardY = topMargin + row * (cardHeight + gapY);
+
+      // Card bounding box
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setLineWidth(0.3);
+      doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+
+      // Top badge: Roll number
+      doc.setFillColor(241, 245, 249); // slate-100
+      doc.roundedRect(cardX + 2, cardY + 2, 14, 5, 1, 1, 'F');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(79, 70, 229); // indigo-600
+      doc.text(`Nº ${String(student.rollNumber).padStart(2, '0')}`, cardX + 9, cardY + 5.5, { align: 'center' });
+
+      // Status pill if not active
+      if (student.status !== 'active') {
+        const isCanceled = student.status === 'canceled';
+        doc.setFillColor(isCanceled ? 255 : 254, isCanceled ? 241 : 243, isCanceled ? 242 : 199);
+        doc.roundedRect(cardX + cardWidth - 19, cardY + 2, 17, 5, 1, 1, 'F');
+        doc.setFontSize(5.5);
+        doc.setTextColor(isCanceled ? 225 : 180, isCanceled ? 29 : 83, isCanceled ? 72 : 9);
+        doc.text(isCanceled ? 'CANCELADO' : 'TRANSF.', cardX + cardWidth - 10.5, cardY + 5.5, { align: 'center' });
+      }
+
+      // Photo Box (Square 26mm x 26mm, centered)
+      const photoSize = 25;
+      const photoX = cardX + (cardWidth - photoSize) / 2;
+      const photoY = cardY + 8.5;
+
+      if (student.photoUrl) {
+        try {
+          const format = student.photoUrl.includes('png') ? 'PNG' : 'JPEG';
+          doc.addImage(student.photoUrl, format, photoX, photoY, photoSize, photoSize, undefined, 'FAST');
+          // Border around photo
+          doc.setDrawColor(203, 213, 225);
+          doc.setLineWidth(0.2);
+          doc.rect(photoX, photoY, photoSize, photoSize);
+        } catch (e) {
+          drawPlaceholder(doc, student, photoX, photoY, photoSize);
+        }
+      } else {
+        drawPlaceholder(doc, student, photoX, photoY, photoSize);
+      }
+
+      // Student Name (multiline text wrap)
+      const nameY = photoY + photoSize + 4.5;
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59); // slate-800
+      const splitName = doc.splitTextToSize(student.name, cardWidth - 4);
+      const nameLines = splitName.slice(0, 2);
+      doc.text(nameLines, cardX + cardWidth / 2, nameY, { align: 'center' });
+
+      // Enrollment / RA
+      const raY = nameY + (nameLines.length > 1 ? 6.5 : 4.5);
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139); // slate-500
+      const raText = student.enrollmentNumber ? `RA: ${student.enrollmentNumber}` : 'RA: —';
+      doc.text(raText, cardX + cardWidth / 2, Math.min(raY, cardY + cardHeight - 2.5), { align: 'center' });
+    });
+
+    // Page footer
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      `Diário do Professor • Caródromo Oficial da Turma ${currentClass.name} • Emitido em ${new Date().toLocaleDateString('pt-BR')}`,
+      marginX,
+      pageHeight - 8
+    );
+    doc.text(`Página ${page + 1} de ${totalPages}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
+  }
+
+  const filename = `Carodromo_${currentClass.name.replace(/\s+/g, '_')}.pdf`;
+  doc.save(filename);
+}
+
+/**
  * Generates and downloads the Official Class Diary with Attendance & Lessons Content
  * (Diário de Classe Completo: Frequência/Chamada + Conteúdos Ministrados)
  */

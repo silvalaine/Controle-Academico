@@ -14,7 +14,11 @@ import {
   UserPlus,
   AlertCircle,
   CheckCircle2,
-  X
+  X,
+  Camera,
+  UserCircle,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
 import {
   ClassRoom,
@@ -24,7 +28,8 @@ import {
   GradeRecord,
   AttendanceRecord
 } from '../types';
-import { generateStudentListPDF } from '../utils/pdfGenerator';
+import { generateStudentListPDF, generateCarodromoPDF } from '../utils/pdfGenerator';
+import { compressStudentPhoto } from '../utils/imageCompressor';
 import { calculateStudentAttendance, calculateStudentOverallAverage } from '../utils/calculations';
 import { SchoolLogoSelector } from './SchoolLogoSelector';
 import {
@@ -46,7 +51,7 @@ interface StudentListGeneratorProps {
   onDeleteStudent?: (studentId: string) => void;
 }
 
-export type ListTemplateMode = 'chamada' | 'assinatura' | 'cadastral' | 'desempenho';
+export type ListTemplateMode = 'chamada' | 'assinatura' | 'cadastral' | 'desempenho' | 'carodromo';
 
 export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
   currentClass,
@@ -69,7 +74,7 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [statusFeedback, setStatusFeedback] = useState<string | null>(null);
 
-  // Add Student modal state
+  // Add Student modal state & photo upload
   const [isAddingStudent, setIsAddingStudent] = useState<boolean>(false);
   const [stdName, setStdName] = useState<string>('');
   const [stdRoll, setStdRoll] = useState<number>(() => {
@@ -80,6 +85,9 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
   const [stdGuardian, setStdGuardian] = useState<string>('');
   const [stdPhone, setStdPhone] = useState<string>('');
   const [stdStatus, setStdStatus] = useState<StudentStatus>('active');
+  const [stdPhotoUrl, setStdPhotoUrl] = useState<string>('');
+  const [isPhotoLoading, setIsPhotoLoading] = useState<boolean>(false);
+  const [uploadingStudentId, setUploadingStudentId] = useState<string | null>(null);
 
   const [schoolName, setSchoolName] = useState<string>(() => {
     return getSchoolName();
@@ -139,6 +147,16 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
   };
 
   const handleExportPDF = () => {
+    if (templateMode === 'carodromo') {
+      generateCarodromoPDF(currentClass, classStudents, {
+        schoolName: schoolName.trim() || undefined,
+        schoolLogo: includeLogo ? schoolLogo : null,
+        includeLogo,
+        customTitle: customTitle.trim() || undefined
+      });
+      return;
+    }
+
     generateStudentListPDF(currentClass, classStudents, templateMode, {
       schoolName: schoolName.trim() || undefined,
       schoolLogo: includeLogo ? schoolLogo : null,
@@ -175,6 +193,37 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
     }
   };
 
+  const handleQuickPhotoUpload = async (student: Student, file: File) => {
+    try {
+      setUploadingStudentId(student.id);
+      const compressed = await compressStudentPhoto(file, 240, 0.82);
+      if (onUpdateStudent) {
+        onUpdateStudent({ ...student, photoUrl: compressed });
+      }
+      setStatusFeedback(`Foto de ${student.name} atualizada com sucesso!`);
+      setTimeout(() => setStatusFeedback(null), 3000);
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao processar a foto.');
+    } finally {
+      setUploadingStudentId(null);
+    }
+  };
+
+  const handleNewStudentPhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsPhotoLoading(true);
+      const compressed = await compressStudentPhoto(file, 240, 0.82);
+      setStdPhotoUrl(compressed);
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao processar a foto.');
+    } finally {
+      setIsPhotoLoading(false);
+      e.target.value = '';
+    }
+  };
+
   const handleOpenAddStudent = () => {
     const classStds = students.filter(s => s.classId === currentClass.id);
     const nextRoll = classStds.length > 0 ? Math.max(...classStds.map(s => s.rollNumber)) + 1 : 1;
@@ -184,6 +233,7 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
     setStdGuardian('');
     setStdPhone('');
     setStdStatus('active');
+    setStdPhotoUrl('');
     setIsAddingStudent(true);
   };
 
@@ -198,7 +248,8 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
         enrollmentNumber: stdEnrollment.trim() || `MAT-${Date.now().toString().slice(-4)}`,
         guardianName: stdGuardian.trim() || undefined,
         guardianPhone: stdPhone.trim() || undefined,
-        status: stdStatus
+        status: stdStatus,
+        photoUrl: stdPhotoUrl || undefined
       });
       setStatusFeedback(`Aluno "${stdName.trim()}" cadastrado com sucesso!`);
       setTimeout(() => setStatusFeedback(null), 4000);
@@ -210,7 +261,8 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
     chamada: `Lista de Chamada Diária — ${currentClass.name}`,
     assinatura: `Comprovante de Assinatura & Entrega — ${currentClass.name}`,
     cadastral: `Ficha Cadastral e Contatos dos Responsáveis — ${currentClass.name}`,
-    desempenho: `Relação da Turma com Frequência & Médias — ${currentClass.name}`
+    desempenho: `Relação da Turma com Frequência & Médias — ${currentClass.name}`,
+    carodromo: `Caródromo dos Alunos — ${currentClass.name}`
   };
 
   const effectiveTitle = customTitle.trim() || defaultTitles[templateMode];
@@ -409,6 +461,48 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
                 </div>
               </div>
 
+              {/* Foto do Aluno */}
+              <div className="flex items-center gap-3.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="w-14 h-14 rounded-xl border border-slate-300 flex items-center justify-center overflow-hidden bg-white shrink-0 relative">
+                  {stdPhotoUrl ? (
+                    <img src={stdPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCircle className="w-8 h-8 text-slate-300" />
+                  )}
+                  {isPhotoLoading && (
+                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-indigo-600">Ajustando...</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-slate-800 block">Foto do Aluno (Caródromo)</span>
+                  <span className="text-[11px] text-slate-500 block mb-1">Insira uma foto para o caródromo da turma.</span>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-100 text-indigo-700 text-xs font-semibold rounded-lg border border-slate-300 cursor-pointer transition">
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>{stdPhotoUrl ? 'Trocar' : 'Carregar Foto'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleNewStudentPhotoSelected}
+                        className="hidden"
+                        disabled={isPhotoLoading}
+                      />
+                    </label>
+                    {stdPhotoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setStdPhotoUrl('')}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-semibold px-1.5 py-1"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -458,7 +552,7 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
           <label className="text-xs font-bold text-slate-700 block mb-2">
             Selecione o Modelo da Lista:
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
             <button
               type="button"
               onClick={() => setTemplateMode('chamada')}
@@ -527,6 +621,24 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
                 <span className="block text-xs font-bold">Resumo & Frequência</span>
                 <span className="block text-[11px] text-slate-500 mt-0.5">
                   Frequência % acumulada e médias.
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTemplateMode('carodromo')}
+              className={`flex items-start gap-3 p-3 rounded-xl border text-left transition ${
+                templateMode === 'carodromo'
+                  ? 'bg-indigo-50/80 border-indigo-400 text-indigo-950 ring-2 ring-indigo-500/20'
+                  : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100/70'
+              }`}
+            >
+              <Camera className={`w-5 h-5 shrink-0 mt-0.5 ${templateMode === 'carodromo' ? 'text-indigo-600' : 'text-slate-400'}`} />
+              <div>
+                <span className="block text-xs font-bold">Caródromo da Turma</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">
+                  Mural com fotos, nomes e matrículas.
                 </span>
               </div>
             </button>
@@ -731,240 +843,371 @@ export const StudentListGenerator: React.FC<StudentListGeneratorProps> = ({
           </div>
         </div>
 
-        {/* The Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse border border-slate-300">
-            <thead>
-              <tr className="bg-slate-50 text-slate-800 font-bold border-b border-slate-300">
-                <th className="py-2 px-2.5 text-center w-10 border-r border-slate-300">Nº</th>
-                <th className="py-2 px-3 w-28 border-r border-slate-300">Matrícula</th>
-                <th className="py-2 px-3 border-r border-slate-300 min-w-[200px]">Nome Completo do Estudante</th>
+        {/* CARÓDROMO VIEW */}
+        {templateMode === 'carodromo' ? (
+          <div>
+            <div className="mb-4 flex items-center justify-between bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-900 print:hidden">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>
+                  <strong>Caródromo da Turma:</strong> Identificação visual com fotos dos estudantes. Clique no botão de câmera em qualquer card para carregar ou alterar a foto. Ao clicar em <strong>Baixar PDF</strong>, as fotos serão organizadas em grade institucional de 16 alunos por folha.
+                </span>
+              </div>
+            </div>
 
-                {/* Chamada Template Columns */}
-                {templateMode === 'chamada' && (
-                  Array.from({ length: blankColumnsCount }).map((_, idx) => (
-                    <th
-                      key={idx}
-                      className="py-1 px-1.5 text-center w-11 border-r border-slate-300 font-normal text-[10px]"
-                    >
-                      <div className="flex flex-col items-center">
-                        <span className="font-bold text-slate-700">__/__</span>
-                        <span className="text-slate-400 text-[9px]">{idx + 1}</span>
+            {classStudents.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                Nenhum estudante encontrado para os filtros selecionados.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
+                {classStudents.map((student) => (
+                  <div
+                    key={student.id}
+                    className="relative bg-white rounded-xl border border-slate-200 hover:border-indigo-300 shadow-2xs hover:shadow-sm p-3.5 flex flex-col items-center text-center transition group print:border-slate-300 print:shadow-none"
+                  >
+                    {/* Roll Number Badge */}
+                    <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-indigo-50 text-indigo-700 font-black text-[11px] rounded-md border border-indigo-200">
+                      Nº {String(student.rollNumber).padStart(2, '0')}
+                    </div>
+
+                    {/* Status Badge (if not active) */}
+                    {student.status !== 'active' && (
+                      <div className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        student.status === 'canceled'
+                          ? 'bg-rose-100 text-rose-800'
+                          : student.status === 'transferred'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {student.status === 'canceled' ? 'Cancelado' : student.status === 'transferred' ? 'Transferido' : 'Inativo'}
                       </div>
-                    </th>
-                  ))
-                )}
+                    )}
 
-                {/* Assinatura Template Columns */}
-                {templateMode === 'assinatura' && (
-                  <>
-                    <th className="py-2 px-3 text-center w-24 border-r border-slate-300">Data</th>
-                    <th className="py-2 px-4 border-r border-slate-300">
-                      Assinatura / Rubrica do Estudante ou Responsável
-                    </th>
-                  </>
-                )}
+                    {/* Photo Container */}
+                    <div className="relative mt-5 mb-2.5 w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 border-2 border-indigo-100 shadow-2xs flex items-center justify-center group-hover:border-indigo-400 transition">
+                      {student.photoUrl ? (
+                        <img
+                          src={student.photoUrl}
+                          alt={student.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-indigo-50 to-slate-100 text-indigo-300">
+                          <UserCircle className="w-14 h-14" />
+                          <span className="text-[10px] font-bold text-indigo-400 mt-0.5">Sem foto</span>
+                        </div>
+                      )}
 
-                {/* Cadastral Template Columns */}
-                {templateMode === 'cadastral' && (
-                  <>
-                    <th className="py-2 px-3 border-r border-slate-300">Nome do Responsável</th>
-                    <th className="py-2 px-3 border-r border-slate-300 w-36">Telefone de Contato</th>
-                    <th className="py-2 px-3 text-center w-24 border-r border-slate-300">Situação</th>
-                  </>
-                )}
+                      {/* Loading Overlay */}
+                      {uploadingStudentId === student.id && (
+                        <div className="absolute inset-0 bg-white/85 flex flex-col items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-[9px] font-bold text-indigo-700 mt-1">Salvando...</span>
+                        </div>
+                      )}
 
-                {/* Desempenho Template Columns */}
-                {templateMode === 'desempenho' && (
-                  <>
-                    <th className="py-2 px-2.5 text-center w-24 border-r border-slate-300">Freq. (%)</th>
-                    <th className="py-2 px-2.5 text-center w-24 border-r border-slate-300">Média Geral</th>
-                    <th className="py-2 px-3 text-center w-28 border-r border-slate-300">Situação</th>
-                  </>
-                )}
-              </tr>
-            </thead>
+                      {/* Camera Button to Change/Upload Photo (hover desktop, print hidden) */}
+                      {onUpdateStudent && (
+                        <label
+                          className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition print:hidden"
+                          title="Clique para tirar ou carregar foto deste estudante"
+                        >
+                          <Camera className="w-6 h-6 mb-1 text-white drop-shadow" />
+                          <span className="text-[10px] font-bold bg-black/50 px-2 py-0.5 rounded text-white">
+                            {student.photoUrl ? 'Alterar' : 'Inserir Foto'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleQuickPhotoUpload(student, file);
+                              e.target.value = '';
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
 
-            <tbody className="divide-y divide-slate-200">
-              {classStudents.length === 0 ? (
-                <tr>
-                  <td colSpan={16} className="py-8 text-center text-slate-400 italic">
-                    Nenhum estudante encontrado para os filtros selecionados.
-                  </td>
+                    {/* Student Name */}
+                    <h3 className="font-bold text-xs sm:text-sm text-slate-900 line-clamp-2 leading-tight">
+                      {student.name}
+                    </h3>
+
+                    {/* Student Enrollment / RA */}
+                    <p className="text-[11px] font-mono text-slate-500 mt-1">
+                      {student.enrollmentNumber ? `Matrícula: ${student.enrollmentNumber}` : '—'}
+                    </p>
+
+                    {/* Quick photo upload button for touch / direct click */}
+                    {onUpdateStudent && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 w-full flex items-center justify-center print:hidden">
+                        <label className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50/70 hover:bg-indigo-100 px-2.5 py-1 rounded-lg cursor-pointer transition">
+                          <Camera className="w-3 h-3" />
+                          <span>{student.photoUrl ? 'Trocar Foto' : 'Inserir Foto'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleQuickPhotoUpload(student, file);
+                              e.target.value = '';
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* The Table for Chamada, Assinatura, Cadastral, Desempenho */
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse border border-slate-300">
+              <thead>
+                <tr className="bg-slate-50 text-slate-800 font-bold border-b border-slate-300">
+                  <th className="py-2 px-2.5 text-center w-10 border-r border-slate-300">Nº</th>
+                  <th className="py-2 px-3 w-28 border-r border-slate-300">Matrícula</th>
+                  <th className="py-2 px-3 border-r border-slate-300 min-w-[200px]">Nome Completo do Estudante</th>
+
+                  {/* Chamada Template Columns */}
+                  {templateMode === 'chamada' && (
+                    Array.from({ length: blankColumnsCount }).map((_, idx) => (
+                      <th
+                        key={idx}
+                        className="py-1 px-1.5 text-center w-11 border-r border-slate-300 font-normal text-[10px]"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="font-bold text-slate-700">__/__</span>
+                          <span className="text-slate-400 text-[9px]">{idx + 1}</span>
+                        </div>
+                      </th>
+                    ))
+                  )}
+
+                  {/* Assinatura Template Columns */}
+                  {templateMode === 'assinatura' && (
+                    <>
+                      <th className="py-2 px-3 text-center w-24 border-r border-slate-300">Data</th>
+                      <th className="py-2 px-4 border-r border-slate-300">
+                        Assinatura / Rubrica do Estudante ou Responsável
+                      </th>
+                    </>
+                  )}
+
+                  {/* Cadastral Template Columns */}
+                  {templateMode === 'cadastral' && (
+                    <>
+                      <th className="py-2 px-3 border-r border-slate-300">Nome do Responsável</th>
+                      <th className="py-2 px-3 border-r border-slate-300 w-36">Telefone de Contato</th>
+                      <th className="py-2 px-3 text-center w-24 border-r border-slate-300">Situação</th>
+                    </>
+                  )}
+
+                  {/* Desempenho Template Columns */}
+                  {templateMode === 'desempenho' && (
+                    <>
+                      <th className="py-2 px-2.5 text-center w-24 border-r border-slate-300">Freq. (%)</th>
+                      <th className="py-2 px-2.5 text-center w-24 border-r border-slate-300">Média Geral</th>
+                      <th className="py-2 px-3 text-center w-28 border-r border-slate-300">Situação</th>
+                    </>
+                  )}
                 </tr>
-              ) : (
-                classStudents.map((student, idx) => {
-                  let attPercent = 100;
-                  let studentSummary: any = null;
+              </thead>
 
-                  if (templateMode === 'desempenho') {
-                    const att = calculateStudentAttendance(student.id, currentClass.id, attendances);
-                    attPercent = att.attendanceRate;
-                    studentSummary = calculateStudentOverallAverage(
-                      student.id,
-                      currentClass,
-                      assessments,
-                      gradeRecords
-                    );
-                  }
+              <tbody className="divide-y divide-slate-200">
+                {classStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={16} className="py-8 text-center text-slate-400 italic">
+                      Nenhum estudante encontrado para os filtros selecionados.
+                    </td>
+                  </tr>
+                ) : (
+                  classStudents.map((student, idx) => {
+                    let attPercent = 100;
+                    let studentSummary: any = null;
 
-                  return (
-                    <tr
-                      key={student.id}
-                      className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50 print:bg-transparent'}
-                    >
-                      <td className="py-2 px-2 text-center font-bold text-slate-700 border-r border-slate-300">
-                        {String(student.rollNumber).padStart(2, '0')}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-[11px] text-slate-600 border-r border-slate-300">
-                        {student.enrollmentNumber || '—'}
-                      </td>
-                      <td className="py-2 px-3 font-medium text-slate-900 border-r border-slate-300">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={student.status === 'canceled' ? 'line-through text-slate-400 font-normal' : ''}>
-                              {student.name}
-                            </span>
-                            {student.status === 'canceled' && (
-                              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
-                                Cancelado (Saída da escola)
+                    if (templateMode === 'desempenho') {
+                      const att = calculateStudentAttendance(student.id, currentClass.id, attendances);
+                      attPercent = att.attendanceRate;
+                      studentSummary = calculateStudentOverallAverage(
+                        student.id,
+                        currentClass,
+                        assessments,
+                        gradeRecords
+                      );
+                    }
+
+                    return (
+                      <tr
+                        key={student.id}
+                        className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50 print:bg-transparent'}
+                      >
+                        <td className="py-2 px-2 text-center font-bold text-slate-700 border-r border-slate-300">
+                          {String(student.rollNumber).padStart(2, '0')}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-slate-600 border-r border-slate-300">
+                          {student.enrollmentNumber || '—'}
+                        </td>
+                        <td className="py-2 px-3 font-medium text-slate-900 border-r border-slate-300">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="w-6 h-6 rounded-full overflow-hidden bg-indigo-50 border border-slate-200 shrink-0 flex items-center justify-center print:hidden">
+                                {student.photoUrl ? (
+                                  <img src={student.photoUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <UserCircle className="w-5 h-5 text-indigo-300" />
+                                )}
+                              </div>
+                              <span className={student.status === 'canceled' ? 'line-through text-slate-400 font-normal' : ''}>
+                                {student.name}
                               </span>
-                            )}
-                            {student.status === 'transferred' && (
-                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                                Transferido
-                              </span>
+                              {student.status === 'canceled' && (
+                                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                  Cancelado (Saída da escola)
+                                </span>
+                              )}
+                              {student.status === 'transferred' && (
+                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                  Transferido
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Quick Status Select on all list modes */}
+                            {onUpdateStudent && (
+                              <div className="print:hidden shrink-0">
+                                <select
+                                  value={student.status || 'active'}
+                                  onChange={(e) => handleStatusChange(student, e.target.value as any)}
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer focus:outline-none transition ${
+                                    student.status === 'active'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                      : student.status === 'canceled'
+                                      ? 'bg-rose-50 text-rose-800 border-rose-300 font-black hover:bg-rose-100'
+                                      : student.status === 'transferred'
+                                      ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                                      : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                                  }`}
+                                  title="Alterar situação da matrícula do aluno (Ativo, Cancelado quando sair da escola, Transferido)"
+                                >
+                                  <option value="active">✓ Ativo</option>
+                                  <option value="canceled">✖ Cancelado (Saiu da escola)</option>
+                                  <option value="transferred">➜ Transferido</option>
+                                  <option value="inactive">○ Inativo</option>
+                                </select>
+                              </div>
                             )}
                           </div>
+                        </td>
 
-                          {/* Quick Status Select on all list modes */}
-                          {onUpdateStudent && (
-                            <div className="print:hidden shrink-0">
-                              <select
-                                value={student.status || 'active'}
-                                onChange={(e) => handleStatusChange(student, e.target.value as any)}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer focus:outline-none transition ${
-                                  student.status === 'active'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                                    : student.status === 'canceled'
-                                    ? 'bg-rose-50 text-rose-800 border-rose-300 font-black hover:bg-rose-100'
-                                    : student.status === 'transferred'
-                                    ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                                    : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
-                                }`}
-                                title="Alterar situação da matrícula do aluno (Ativo, Cancelado quando sair da escola, Transferido)"
-                              >
-                                <option value="active">✓ Ativo</option>
-                                <option value="canceled">✖ Cancelado (Saiu da escola)</option>
-                                <option value="transferred">➜ Transferido</option>
-                                <option value="inactive">○ Inativo</option>
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                        {/* Chamada Empty Cells */}
+                        {templateMode === 'chamada' && (
+                          Array.from({ length: blankColumnsCount }).map((_, cIdx) => (
+                            <td
+                              key={cIdx}
+                              className="py-2 px-1 text-center border-r border-slate-300 h-8"
+                            >
+                              &nbsp;
+                            </td>
+                          ))
+                        )}
 
-                      {/* Chamada Empty Cells */}
-                      {templateMode === 'chamada' && (
-                        Array.from({ length: blankColumnsCount }).map((_, cIdx) => (
-                          <td
-                            key={cIdx}
-                            className="py-2 px-1 text-center border-r border-slate-300 h-8"
-                          >
-                            &nbsp;
-                          </td>
-                        ))
-                      )}
+                        {/* Assinatura Cells */}
+                        {templateMode === 'assinatura' && (
+                          <>
+                            <td className="py-2 px-2 text-center border-r border-slate-300 text-slate-400">
+                              ___/___/2026
+                            </td>
+                            <td className="py-2 px-4 border-r border-slate-300 h-9">
+                              <div className="w-full border-b border-dotted border-slate-400 mt-4"></div>
+                            </td>
+                          </>
+                        )}
 
-                      {/* Assinatura Cells */}
-                      {templateMode === 'assinatura' && (
-                        <>
-                          <td className="py-2 px-2 text-center border-r border-slate-300 text-slate-400">
-                            ___/___/2026
-                          </td>
-                          <td className="py-2 px-4 border-r border-slate-300 h-9">
-                            <div className="w-full border-b border-dotted border-slate-400 mt-4"></div>
-                          </td>
-                        </>
-                      )}
+                        {/* Cadastral Cells */}
+                        {templateMode === 'cadastral' && (
+                          <>
+                            <td className="py-2 px-3 text-slate-700 border-r border-slate-300">
+                              {student.guardianName || '—'}
+                            </td>
+                            <td className="py-2 px-3 text-slate-700 font-mono text-[11px] border-r border-slate-300">
+                              {student.guardianPhone || '—'}
+                            </td>
+                            <td className="py-2 px-3 text-center border-r border-slate-300">
+                              {onUpdateStudent ? (
+                                <select
+                                  value={student.status || 'active'}
+                                  onChange={(e) => onUpdateStudent({ ...student, status: e.target.value as any })}
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer focus:outline-none print:hidden ${
+                                    student.status === 'active'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                      : student.status === 'canceled'
+                                      ? 'bg-rose-50 text-rose-800 border-rose-300 font-extrabold'
+                                      : student.status === 'transferred'
+                                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                      : 'bg-slate-50 text-slate-700 border-slate-300'
+                                  }`}
+                                  title="Alterar situação da matrícula"
+                                >
+                                  <option value="active">Ativo</option>
+                                  <option value="canceled">Cancelado (Saiu)</option>
+                                  <option value="transferred">Transferido</option>
+                                  <option value="inactive">Inativo</option>
+                                </select>
+                              ) : null}
+                              <span className={onUpdateStudent ? 'hidden print:inline-block text-[10px] font-bold' : `inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                student.status === 'active'
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : student.status === 'canceled'
+                                  ? 'bg-rose-50 text-rose-800 font-extrabold'
+                                  : student.status === 'transferred'
+                                  ? 'bg-amber-50 text-amber-800'
+                                  : 'bg-slate-50 text-slate-700'
+                              }`}>
+                                {student.status === 'active' ? 'Ativo' :
+                                 student.status === 'canceled' ? 'Cancelado' :
+                                 student.status === 'transferred' ? 'Transferido' : 'Inativo'}
+                              </span>
+                            </td>
+                          </>
+                        )}
 
-                      {/* Cadastral Cells */}
-                      {templateMode === 'cadastral' && (
-                        <>
-                          <td className="py-2 px-3 text-slate-700 border-r border-slate-300">
-                            {student.guardianName || '—'}
-                          </td>
-                          <td className="py-2 px-3 text-slate-700 font-mono text-[11px] border-r border-slate-300">
-                            {student.guardianPhone || '—'}
-                          </td>
-                          <td className="py-2 px-3 text-center border-r border-slate-300">
-                            {onUpdateStudent ? (
-                              <select
-                                value={student.status || 'active'}
-                                onChange={(e) => onUpdateStudent({ ...student, status: e.target.value as any })}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-pointer focus:outline-none print:hidden ${
-                                  student.status === 'active'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                    : student.status === 'canceled'
-                                    ? 'bg-rose-50 text-rose-800 border-rose-300 font-extrabold'
-                                    : student.status === 'transferred'
-                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
-                                    : 'bg-slate-50 text-slate-700 border-slate-300'
-                                }`}
-                                title="Alterar situação da matrícula"
-                              >
-                                <option value="active">Ativo</option>
-                                <option value="canceled">Cancelado (Saiu)</option>
-                                <option value="transferred">Transferido</option>
-                                <option value="inactive">Inativo</option>
-                              </select>
-                            ) : null}
-                            <span className={onUpdateStudent ? 'hidden print:inline-block text-[10px] font-bold' : `inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              student.status === 'active'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : student.status === 'canceled'
-                                ? 'bg-rose-50 text-rose-800 font-extrabold'
-                                : student.status === 'transferred'
-                                ? 'bg-amber-50 text-amber-800'
-                                : 'bg-slate-50 text-slate-700'
-                            }`}>
-                              {student.status === 'active' ? 'Ativo' :
-                               student.status === 'canceled' ? 'Cancelado' :
-                               student.status === 'transferred' ? 'Transferido' : 'Inativo'}
-                            </span>
-                          </td>
-                        </>
-                      )}
-
-                      {/* Desempenho Cells */}
-                      {templateMode === 'desempenho' && (
-                        <>
-                          <td className="py-2 px-2.5 text-center font-bold border-r border-slate-300">
-                            <span className={attPercent < 75 ? 'text-rose-700 font-black' : 'text-slate-800'}>
-                              {attPercent}%
-                            </span>
-                          </td>
-                          <td className="py-2 px-2.5 text-center font-bold border-r border-slate-300 text-indigo-700">
-                            {studentSummary?.definitiveAverage !== null
-                              ? Number(studentSummary.definitiveAverage).toFixed(1)
-                              : '—'}
-                          </td>
-                          <td className="py-2 px-3 text-center border-r border-slate-300">
-                            <span className="text-[11px] font-semibold text-slate-700">
-                              {studentSummary?.status === 'approved' ? 'Aprovado' :
-                               studentSummary?.status === 'recovery' ? 'Recuperação' :
-                               studentSummary?.status === 'failed' ? 'Reprovado' : 'Em curso'}
-                            </span>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        {/* Desempenho Cells */}
+                        {templateMode === 'desempenho' && (
+                          <>
+                            <td className="py-2 px-2.5 text-center font-bold border-r border-slate-300">
+                              <span className={attPercent < 75 ? 'text-rose-700 font-black' : 'text-slate-800'}>
+                                {attPercent}%
+                              </span>
+                            </td>
+                            <td className="py-2 px-2.5 text-center font-bold border-r border-slate-300 text-indigo-700">
+                              {studentSummary?.definitiveAverage !== null
+                                ? Number(studentSummary.definitiveAverage).toFixed(1)
+                                : '—'}
+                            </td>
+                            <td className="py-2 px-3 text-center border-r border-slate-300">
+                              <span className="text-[11px] font-semibold text-slate-700">
+                                {studentSummary?.status === 'approved' ? 'Aprovado' :
+                                 studentSummary?.status === 'recovery' ? 'Recuperação' :
+                                 studentSummary?.status === 'failed' ? 'Reprovado' : 'Em curso'}
+                              </span>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Printable Footer with Signatures */}
         {showSignatures && (

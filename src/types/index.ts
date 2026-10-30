@@ -45,6 +45,7 @@ export interface Student {
   guardianPhone?: string;
   status: StudentStatus;
   notes?: string;
+  photoUrl?: string; // Foto do aluno (Data URL em base64 compactada para caródromo e ficha)
 }
 
 export type AssessmentType = 'prova' | 'trabalho' | 'simulado' | 'participacao' | 'recuperacao';
