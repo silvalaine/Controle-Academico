@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Camera,
   UserCircle,
+  KeyRound,
   X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -29,6 +30,7 @@ import { UserManagement } from './UserManagement';
 import { SchoolLogoSelector } from './SchoolLogoSelector';
 import { TermPeriodsEditor } from './TermPeriodsEditor';
 import { getDefaultTermPeriods, formatPeriodRange } from '../utils/calculations';
+import { isAdmin as checkIsAdmin, getRegisteredUsers, loginUser, verifyPassword } from '../utils/auth';
 import {
   getSchoolLogo,
   getSchoolName,
@@ -53,6 +55,7 @@ interface ManagementProps {
   onDeleteStudent: (studentId: string) => void;
   onImportStudentsBatch?: (newStudents: Omit<Student, 'id'>[], replaceExisting: boolean) => void;
   currentUser?: User;
+  onUserUpdated?: (updatedUser: User) => void;
   initialSection?: 'students' | 'classes' | 'years' | 'users' | 'school';
 }
 
@@ -73,10 +76,14 @@ export const ManagementModal: React.FC<ManagementProps> = ({
   onDeleteStudent,
   onImportStudentsBatch,
   currentUser,
+  onUserUpdated,
   initialSection = 'students'
 }) => {
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = checkIsAdmin(currentUser);
   const [activeSection, setActiveSection] = useState<'students' | 'classes' | 'years' | 'users' | 'school'>(initialSection);
+  const [adminSwitchIdentifier, setAdminSwitchIdentifier] = useState('admin');
+  const [adminSwitchPassword, setAdminSwitchPassword] = useState('');
+  const [adminSwitchError, setAdminSwitchError] = useState<string | null>(null);
 
   // School Identity & Logo Configuration State
   const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
@@ -495,19 +502,24 @@ export const ManagementModal: React.FC<ManagementProps> = ({
             <span>Anos Letivos ({academicYears.length})</span>
           </button>
 
-          {isAdmin && (
-            <button
-              onClick={() => setActiveSection('users')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-                activeSection === 'users'
-                  ? 'bg-indigo-600 text-white shadow-xs font-bold'
-                  : 'text-indigo-700 hover:bg-indigo-50 font-bold'
-              }`}
-            >
+          <button
+            onClick={() => {
+              setAdminSwitchError(null);
+              setActiveSection('users');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              activeSection === 'users'
+                ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                : 'text-indigo-700 hover:bg-indigo-50 font-bold'
+            }`}
+          >
+            {isAdmin ? (
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Usuários & Professores</span>
-            </button>
-          )}
+            ) : (
+              <Lock className="w-3.5 h-3.5 text-amber-500" />
+            )}
+            <span>Usuários & Professores</span>
+          </button>
 
           <button
             onClick={() => setActiveSection('school')}
@@ -524,13 +536,28 @@ export const ManagementModal: React.FC<ManagementProps> = ({
       </div>
 
       {/* Professor Restriction Notice */}
-      {!isAdmin && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-amber-900 text-xs flex items-start gap-2.5">
-          <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <strong className="block font-bold">Acesso Restrito: Modo Consulta para Professores</strong>
-            Conforme as regras do sistema, somente o <strong>Administrador</strong> possui autorização para cadastrar novos usuários, turmas, anos letivos e alunos. O professor utiliza os dados já cadastrados para lançamentos pedagógicos.
+      {!isAdmin && activeSection !== 'users' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="leading-relaxed">
+              <strong className="block font-bold">Acesso Restrito: Modo Consulta para Professores</strong>
+              Conforme as regras do sistema, somente o <strong>Administrador</strong> possui autorização para cadastrar novos usuários, turmas, anos letivos e alunos.
+            </div>
           </div>
+          {onUserUpdated && (
+            <button
+              type="button"
+              onClick={() => {
+                setAdminSwitchError(null);
+                setActiveSection('users');
+              }}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer shrink-0 self-end sm:self-center flex items-center gap-1.5"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Entrar como Administrador</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -1487,9 +1514,127 @@ export const ManagementModal: React.FC<ManagementProps> = ({
         </div>
       )}
 
-      {/* SECTION 4: USERS & PROFESSORS (ADMIN ONLY) */}
-      {activeSection === 'users' && isAdmin && currentUser && (
-        <UserManagement currentUser={currentUser} classes={classes} />
+      {/* SECTION 4: USERS & PROFESSORS */}
+      {activeSection === 'users' && currentUser && (
+        isAdmin ? (
+          <UserManagement
+            currentUser={currentUser}
+            classes={classes}
+            onCurrentUserUpdated={onUserUpdated}
+          />
+        ) : (
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs max-w-lg mx-auto">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Cadastro & Gestão de Usuários
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Você está conectado no perfil <strong>Professor</strong> (@{currentUser.username || currentUser.name}).
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed mb-4">
+              O cadastro e a edição de usuários são liberados apenas para contas com perfil <strong>Administrador</strong>. Autentique-se abaixo com uma conta administrativa para liberar imediatamente esta aba:
+            </div>
+
+            {adminSwitchError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{adminSwitchError}</span>
+              </div>
+            )}
+
+            {(() => {
+              const adminUsers = getRegisteredUsers().filter((u) => checkIsAdmin(u));
+              const defaultAdm = adminUsers.find((u) => verifyPassword('admin123', u.passwordHash));
+              return (
+                <div className="space-y-4">
+                  {defaultAdm && onUserUpdated && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = loginUser(defaultAdm.username || defaultAdm.email, 'admin123');
+                        if (res.success && res.user) {
+                          setAdminSwitchError(null);
+                          onUserUpdated(res.user);
+                        } else {
+                          setAdminSwitchError(res.error || 'Não foi possível entrar como administrador.');
+                        }
+                      }}
+                      className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>
+                        Entrar como Administrador (@{defaultAdm.username || 'admin'})
+                      </span>
+                    </button>
+                  )}
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setAdminSwitchError(null);
+                      const res = loginUser(adminSwitchIdentifier, adminSwitchPassword);
+                      if (!res.success || !res.user) {
+                        setAdminSwitchError(res.error || 'Credenciais inválidas.');
+                        return;
+                      }
+                      if (!checkIsAdmin(res.user)) {
+                        setAdminSwitchError('Esta conta possui perfil Professor. Informe um usuário Administrador.');
+                        return;
+                      }
+                      setAdminSwitchPassword('');
+                      if (onUserUpdated) onUserUpdated(res.user);
+                    }}
+                    className="space-y-3 pt-3 border-t border-slate-100"
+                  >
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Ou informe as credenciais de Administrador:
+                    </p>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Nome de Usuário ou E-mail
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: admin"
+                        value={adminSwitchIdentifier}
+                        onChange={(e) => setAdminSwitchIdentifier(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Senha do Administrador
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={adminSwitchPassword}
+                        onChange={(e) => setAdminSwitchPassword(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2 px-4 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Desbloquear Gestão de Usuários</span>
+                    </button>
+                  </form>
+                </div>
+              );
+            })()}
+          </div>
+        )
       )}
 
       {/* SECTION 5: SCHOOL IDENTITY & LOGO */}

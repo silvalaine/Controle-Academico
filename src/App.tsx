@@ -24,7 +24,7 @@ import { GoogleDriveBackupModal } from './components/GoogleDriveBackupModal';
 import { UserRecoveryModal } from './components/UserRecoveryModal';
 import { BookCorrectionTracker } from './components/BookCorrectionTracker';
 import { Layers, CheckCircle2, AlertCircle, ExternalLink, ShieldAlert, HardDrive } from 'lucide-react';
-import { getCurrentUser, logoutUser } from './utils/auth';
+import { getCurrentUser, logoutUser, isAdmin } from './utils/auth';
 import {
   getSyncEmail,
   setSyncEmail,
@@ -914,7 +914,7 @@ export default function App() {
         onSelectTab={setActiveTab}
         studentCount={activeStudentsCount}
         incidentCount={currentClass ? (data.incidents || []).filter(i => i.classId === currentClass.id).length : 0}
-        isAdmin={currentUser?.role === 'admin'}
+        isAdmin={isAdmin(currentUser)}
       />
 
       {/* Quota Exceeded Friendly Informational Banner */}
@@ -1029,7 +1029,7 @@ export default function App() {
                 ? 'Solicite ao administrador da escola a liberação das turmas que você leciona para iniciar os lançamentos pedagógicos.'
                 : 'Comece cadastrando sua primeira turma na aba de configurações.'}
             </p>
-            {currentUser?.role === 'admin' && (
+            {isAdmin(currentUser) && (
               <button
                 onClick={() => setActiveTab('management')}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
@@ -1160,7 +1160,7 @@ export default function App() {
                 onDeleteIncident={handleDeleteIncident}
                 onAddIncidentType={handleAddIncidentType}
                 onDeleteIncidentType={handleDeleteIncidentType}
-                isAdmin={currentUser?.role === 'admin'}
+                isAdmin={isAdmin(currentUser)}
               />
             )}
 
@@ -1202,6 +1202,7 @@ export default function App() {
                 onDeleteStudent={handleDeleteStudent}
                 onImportStudentsBatch={handleImportStudentsBatch}
                 currentUser={currentUser}
+                onUserUpdated={(updatedUser) => setCurrentUser(updatedUser)}
               />
             )}
           </>

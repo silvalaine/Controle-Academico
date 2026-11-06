@@ -25,7 +25,7 @@ import {
   User as UserIcon
 } from 'lucide-react';
 import { User } from '../types';
-import { loginUser, resetUserPassword, getRegisteredUsers } from '../utils/auth';
+import { loginUser, resetUserPassword, getRegisteredUsers, verifyPassword, isAdmin } from '../utils/auth';
 import { isQuotaCurrentlyBlocked } from '../utils/cloudSync';
 import { SyncStatusInfo } from './Header';
 
@@ -57,9 +57,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   // Registered users state for quick login selection
   const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => getRegisteredUsers());
 
-  // Login form state
-  const [loginIdentifier, setLoginIdentifier] = useState('professor');
-  const [loginPassword, setLoginPassword] = useState('123456');
+  // Login form state (defaults to administrator account so full school & user settings are accessible)
+  const [loginIdentifier, setLoginIdentifier] = useState(() => {
+    const users = getRegisteredUsers();
+    const adm = users.find((u) => isAdmin(u)) || users[0];
+    return adm?.username || adm?.email || 'admin';
+  });
+  const [loginPassword, setLoginPassword] = useState(() => {
+    const users = getRegisteredUsers();
+    const adm = users.find((u) => isAdmin(u));
+    if (adm && verifyPassword('admin123', adm.passwordHash)) {
+      return 'admin123';
+    }
+    return '';
+  });
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -516,7 +527,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   </div>
                   {loginMethod === 'username' && (
                     <p className="text-[10px] text-slate-400 mt-1">
-                      Entre com seu usuário (ex: <span className="font-mono text-slate-600">professor</span>), nome completo ou e-mail.
+                      Entre com seu usuário (ex: <span className="font-mono text-slate-600">admin</span> ou <span className="font-mono text-slate-600">professor</span>), nome completo ou e-mail.
                     </p>
                   )}
                 </div>

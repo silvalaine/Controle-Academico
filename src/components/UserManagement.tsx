@@ -19,7 +19,8 @@ import {
   Layers,
   CheckSquare,
   RotateCcw,
-  AtSign
+  AtSign,
+  Edit2
 } from 'lucide-react';
 import { User, UserRole, ClassRoom } from '../types';
 import {
@@ -38,12 +39,14 @@ interface UserManagementProps {
   currentUser: User;
   classes?: ClassRoom[];
   onUsersChange?: () => void;
+  onCurrentUserUpdated?: (updatedUser: User) => void;
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({
   currentUser,
   classes = [],
-  onUsersChange
+  onUsersChange,
+  onCurrentUserUpdated
 }) => {
   const [users, setUsers] = useState<User[]>(() => getRegisteredUsers());
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,6 +59,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const [userToResetPass, setUserToResetPass] = useState<User | null>(null);
   const [userToEditClasses, setUserToEditClasses] = useState<User | null>(null);
   const [editClassesIds, setEditClassesIds] = useState<string[]>([]);
+  const [userToEdit, setUserToEdit] = useState<User | null>(null);
+
+  // Form: Edit User
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('professor');
+  const [editRoleLabel, setEditRoleLabel] = useState('');
+  const [editSchool, setEditSchool] = useState('');
+  const [editPhone, setEditPhone] = useState('');
 
   // Form: New User
   const [newName, setNewName] = useState('');
@@ -101,6 +114,46 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const handleOpenEditClasses = (user: User) => {
     setUserToEditClasses(user);
     setEditClassesIds(user.assignedClassIds || []);
+  };
+
+  const handleOpenEditUser = (user: User) => {
+    setErrorMsg(null);
+    setUserToEdit(user);
+    setEditName(user.name);
+    setEditUsername(user.username || suggestUsernameFromName(user.name));
+    setEditEmail(user.email.endsWith('@escola.local') ? '' : user.email);
+    setEditRole(user.role);
+    setEditRoleLabel(user.roleLabel || (user.role === 'admin' ? 'Administrador Escolar' : 'Professor(a)'));
+    setEditSchool(user.schoolName || '');
+    setEditPhone(user.phone || '');
+  };
+
+  const handleSaveEditedUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToEdit) return;
+    setErrorMsg(null);
+
+    const res = updateUserProfile(userToEdit.id, {
+      name: editName,
+      username: editUsername,
+      email: editEmail,
+      role: editRole,
+      roleLabel: editRoleLabel,
+      schoolName: editSchool,
+      phone: editPhone
+    });
+
+    if (res.success && res.user) {
+      setSuccessMsg(`Dados de "${res.user.name}" (@${res.user.username}) atualizados com sucesso!`);
+      if (res.user.id === currentUser.id && onCurrentUserUpdated) {
+        onCurrentUserUpdated(res.user);
+      }
+      setUserToEdit(null);
+      refreshUsers();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } else {
+      setErrorMsg(res.error || 'Erro ao atualizar dados do usuário.');
+    }
   };
 
   const handleSaveTeacherClasses = (e: React.FormEvent) => {
@@ -418,24 +471,36 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
               {/* Action Buttons */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUserToResetPass(u);
-                    setNewPassInput('123456');
-                  }}
-                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold p-1"
-                  title="Redefinir senha de acesso deste usuário"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Redefinir Senha</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditUser(u)}
+                    className="flex items-center gap-1 text-slate-700 hover:text-indigo-700 font-semibold p-1 cursor-pointer"
+                    title="Editar dados, usuário ou perfil deste usuário"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Editar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserToResetPass(u);
+                      setNewPassInput('123456');
+                    }}
+                    className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold p-1 cursor-pointer"
+                    title="Redefinir senha de acesso deste usuário"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Redefinir Senha</span>
+                  </button>
+                </div>
 
                 {!isCurrent && (
                   <button
                     type="button"
                     onClick={() => setUserToDelete(u)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                     title={`Excluir usuário ${u.name}`}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -882,6 +947,145 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         onConfirm={handleDeleteUser}
         onCancel={() => setUserToDelete(null)}
       />
+
+      {/* Modal: Editar Usuário */}
+      {userToEdit && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Editar Cadastro de Usuário
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserToEdit(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedUser} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Nome Completo *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Nome de Usuário (Login) *
+                  </label>
+                  <div className="relative">
+                    <AtSign className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value.replace(/\s+/g, '').toLowerCase())}
+                      className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    E-mail (Opcional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="usuario@escola.com"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Tipo de Perfil *
+                  </label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
+                  >
+                    <option value="professor">Professor(a)</option>
+                    <option value="admin">Administrador(a)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Disciplina / Função
+                  </label>
+                  <input
+                    type="text"
+                    value={editRoleLabel}
+                    onChange={(e) => setEditRoleLabel(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Escola / Unidade
+                  </label>
+                  <input
+                    type="text"
+                    value={editSchool}
+                    onChange={(e) => setEditSchool(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Telefone (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setUserToEdit(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Recuperação de Cadastros */}
       <UserRecoveryModal

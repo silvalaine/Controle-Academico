@@ -171,7 +171,7 @@ export const Header: React.FC<HeaderProps> = ({
                       {currentUser.name}
                     </span>
                     <span className="text-[10px] text-indigo-300 block truncate max-w-[120px]">
-                      {currentUser.role}
+                      {currentUser.role === 'admin' ? 'Administrador' : 'Professor'}
                     </span>
                   </div>
                 </button>

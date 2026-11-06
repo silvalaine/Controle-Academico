@@ -129,8 +129,18 @@ function getDefaultUsernameForUser(u: User): string {
 function hydrateUser(u: User): User {
   const username = getDefaultUsernameForUser(u);
   const email = u.email && u.email.trim() ? u.email.trim() : `${username}@escola.local`;
+  const rawRole = String(u.role || '').trim().toLowerCase();
+  const normalizedRole: UserRole =
+    rawRole === 'admin' ||
+    rawRole === 'administrador' ||
+    rawRole === 'administrator' ||
+    email.toLowerCase() === 'admin@escola.com' ||
+    username === 'admin'
+      ? 'admin'
+      : 'professor';
   return {
     ...u,
+    role: normalizedRole,
     username,
     email
   };
@@ -270,12 +280,15 @@ export function setCurrentUser(user: User | null): void {
   }
 }
 
-export function isAdmin(user: User | null): boolean {
+export function isAdmin(user: User | null | undefined): boolean {
   if (!user) return false;
+  const roleLower = String(user.role || '').trim().toLowerCase();
   return Boolean(
-    user.role === 'admin' ||
-      user.email?.toLowerCase() === 'admin@escola.com' ||
-      user.username?.toLowerCase() === 'admin'
+    roleLower === 'admin' ||
+      roleLower === 'administrador' ||
+      roleLower === 'administrator' ||
+      user.email?.trim().toLowerCase() === 'admin@escola.com' ||
+      user.username?.trim().replace(/^@+/, '').toLowerCase() === 'admin'
   );
 }
 
@@ -513,6 +526,14 @@ export function updateUserProfile(
         nextUpdates.username || users[idx].username || suggestUsernameFromName(nextUpdates.name || users[idx].name);
       nextUpdates.email = `${baseUsername}@escola.local`;
     }
+  }
+
+  const admins = users.filter(u => isAdmin(u));
+  if (isAdmin(users[idx]) && nextUpdates.role === 'professor' && admins.length <= 1) {
+    return {
+      success: false,
+      error: 'Não é possível alterar o perfil do único administrador do sistema para professor.'
+    };
   }
 
   const updatedUser: User = hydrateUser({
