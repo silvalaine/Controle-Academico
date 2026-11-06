@@ -303,7 +303,11 @@ export const UserRecoveryModal: React.FC<UserRecoveryModalProps> = ({
                         </div>
                         <div className="min-w-0">
                           <p className="font-bold text-slate-900 truncate">{u.name}</p>
-                          <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {u.username ? `@${u.username}` : ''}
+                            {u.username && u.email && !u.email.endsWith('@escola.local') ? ' • ' : ''}
+                            {u.email && !u.email.endsWith('@escola.local') ? u.email : ''}
+                          </p>
                         </div>
                       </div>
 

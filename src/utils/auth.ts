@@ -92,10 +92,84 @@ export function verifyPassword(password: string, hash: string): boolean {
   return hashPassword(password) === hash;
 }
 
+export function normalizeText(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+export function suggestUsernameFromName(name: string): string {
+  const cleaned = normalizeText(name)
+    .replace(/^(prof\.?|professor(a)?|dr\.?|dra\.?|coord\.?)\s+/i, '')
+    .replace(/[^a-z0-9._-]+/g, '.')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[._-]+|[._-]+$/g, '');
+  return cleaned || 'usuario';
+}
+
+function getDefaultUsernameForUser(u: User): string {
+  if (u.username && u.username.trim()) {
+    return u.username.trim().replace(/^@+/, '').toLowerCase();
+  }
+  const emailLower = (u.email || '').trim().toLowerCase();
+  if (emailLower === 'admin@escola.com' || u.id === 'user-admin-1') {
+    return 'admin';
+  }
+  if (emailLower === 'professor@escola.com' || u.id === 'user-prof-1') {
+    return 'professor';
+  }
+  if (emailLower && emailLower.includes('@') && !emailLower.endsWith('@escola.local')) {
+    return emailLower.split('@')[0].trim().toLowerCase();
+  }
+  return suggestUsernameFromName(u.name);
+}
+
+function hydrateUser(u: User): User {
+  const username = getDefaultUsernameForUser(u);
+  const email = u.email && u.email.trim() ? u.email.trim() : `${username}@escola.local`;
+  return {
+    ...u,
+    username,
+    email
+  };
+}
+
+export function findUserByIdentifier(users: User[], identifier: string): User | undefined {
+  const raw = identifier.trim();
+  if (!raw) return undefined;
+
+  const cleanLower = raw.toLowerCase();
+  const cleanHandle = cleanLower.startsWith('@') ? cleanLower.slice(1) : cleanLower;
+  const cleanNormalized = normalizeText(raw);
+
+  // 1. Exact match by username (with or without leading @)
+  const byUsername = users.find(
+    u => u.username && u.username.trim().toLowerCase() === cleanHandle
+  );
+  if (byUsername) return byUsername;
+
+  // 2. Exact match by email
+  const byEmail = users.find(
+    u => u.email && u.email.trim().toLowerCase() === cleanLower
+  );
+  if (byEmail) return byEmail;
+
+  // 3. Exact or accent-insensitive match by full name
+  const byName = users.find(
+    u => normalizeText(u.name) === cleanNormalized
+  );
+  if (byName) return byName;
+
+  return undefined;
+}
+
 export const initialDefaultUsers: User[] = [
   {
     id: 'user-admin-1',
     name: 'Coordenação Pedagógica / Direção',
+    username: 'admin',
     email: 'admin@escola.com',
     role: 'admin',
     roleLabel: 'Administrador do Sistema',
@@ -108,6 +182,7 @@ export const initialDefaultUsers: User[] = [
   {
     id: 'user-prof-1',
     name: 'Prof. Carlos Eduardo Silva',
+    username: 'professor',
     email: 'professor@escola.com',
     role: 'professor',
     roleLabel: 'Professor de Matemática',
@@ -126,14 +201,20 @@ export function getRegisteredUsers(): User[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const hydrated = parsed.map(hydrateUser);
         // Ensure the admin account exists in the list
-        const hasAdmin = parsed.some((u: User) => u.role === 'admin' || u.email.toLowerCase() === 'admin@escola.com');
+        const hasAdmin = hydrated.some(
+          (u: User) =>
+            u.role === 'admin' ||
+            u.email.toLowerCase() === 'admin@escola.com' ||
+            u.username?.toLowerCase() === 'admin'
+        );
         if (!hasAdmin) {
-          const merged = [initialDefaultUsers[0], ...parsed];
+          const merged = [initialDefaultUsers[0], ...hydrated];
           saveRegisteredUsers(merged);
           return merged;
         }
-        return parsed;
+        return hydrated;
       }
     }
 
@@ -142,8 +223,9 @@ export function getRegisteredUsers(): User[] {
     if (mirror) {
       const parsedMirror = JSON.parse(mirror);
       if (Array.isArray(parsedMirror) && parsedMirror.length > 0) {
-        saveRegisteredUsers(parsedMirror);
-        return parsedMirror;
+        const hydratedMirror = parsedMirror.map(hydrateUser);
+        saveRegisteredUsers(hydratedMirror);
+        return hydratedMirror;
       }
     }
   } catch (err) {
@@ -190,7 +272,11 @@ export function setCurrentUser(user: User | null): void {
 
 export function isAdmin(user: User | null): boolean {
   if (!user) return false;
-  return user.role === 'admin' || user.email.toLowerCase() === 'admin@escola.com';
+  return Boolean(
+    user.role === 'admin' ||
+      user.email?.toLowerCase() === 'admin@escola.com' ||
+      user.username?.toLowerCase() === 'admin'
+  );
 }
 
 /**
@@ -198,7 +284,8 @@ export function isAdmin(user: User | null): boolean {
  */
 export function registerUserByAdmin(data: {
   name: string;
-  email: string;
+  username?: string;
+  email?: string;
   password: string;
   role: UserRole;
   roleLabel?: string;
@@ -206,28 +293,65 @@ export function registerUserByAdmin(data: {
   phone?: string;
   assignedClassIds?: string[];
 }): { success: boolean; user?: User; error?: string } {
-  const cleanEmail = data.email.trim().toLowerCase();
   const cleanName = data.name.trim();
+  const rawUsername = (data.username || '').trim().replace(/^@+/, '').toLowerCase();
+  const rawEmail = (data.email || '').trim().toLowerCase();
 
   if (!cleanName) {
     return { success: false, error: 'O nome completo é obrigatório.' };
   }
-  if (!cleanEmail || !cleanEmail.includes('@')) {
-    return { success: false, error: 'Informe um e-mail válido.' };
+  if (rawUsername && /\s/.test(rawUsername)) {
+    return {
+      success: false,
+      error: 'O nome de usuário não pode conter espaços. Use letras, números, ponto ou underline (ex: maria.silva).'
+    };
+  }
+  if (rawEmail && !rawEmail.includes('@')) {
+    return { success: false, error: 'Informe um e-mail válido ou deixe o campo em branco.' };
   }
   if (!data.password || data.password.length < 6) {
     return { success: false, error: 'A senha provisória deve conter no mínimo 6 caracteres.' };
   }
 
   const users = getRegisteredUsers();
-  const exists = users.some(u => u.email.toLowerCase() === cleanEmail);
-  if (exists) {
-    return { success: false, error: 'Já existe um usuário cadastrado com este e-mail no sistema.' };
+
+  // Determine unique username
+  let cleanUsername =
+    rawUsername ||
+    (rawEmail && rawEmail.includes('@') ? rawEmail.split('@')[0].trim().toLowerCase() : suggestUsernameFromName(cleanName));
+
+  const usernameConflict = users.some(u => u.username?.toLowerCase() === cleanUsername);
+  if (usernameConflict) {
+    if (rawUsername) {
+      return { success: false, error: 'Já existe um usuário cadastrado com este nome de usuário no sistema.' };
+    }
+    let suffix = 2;
+    while (users.some(u => u.username?.toLowerCase() === `${cleanUsername}.${suffix}`)) {
+      suffix++;
+    }
+    cleanUsername = `${cleanUsername}.${suffix}`;
+  }
+
+  // Determine email (optional if username is provided)
+  let cleanEmail = rawEmail;
+  if (cleanEmail) {
+    const emailConflict = users.some(u => u.email.toLowerCase() === cleanEmail);
+    if (emailConflict) {
+      return { success: false, error: 'Já existe um usuário cadastrado com este e-mail no sistema.' };
+    }
+  } else {
+    cleanEmail = `${cleanUsername}@escola.local`;
+    let suffix = 2;
+    while (users.some(u => u.email.toLowerCase() === cleanEmail)) {
+      cleanEmail = `${cleanUsername}.${suffix}@escola.local`;
+      suffix++;
+    }
   }
 
   const newUser: User = {
     id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     name: cleanName,
+    username: cleanUsername,
     email: cleanEmail,
     role: data.role,
     roleLabel: data.roleLabel?.trim() || (data.role === 'admin' ? 'Administrador Escolar' : 'Professor(a)'),
@@ -272,20 +396,23 @@ export function deleteUserByAdmin(userId: string, currentAdminId: string): { suc
 }
 
 export function loginUser(
-  email: string,
+  identifier: string,
   password: string
 ): { success: boolean; user?: User; error?: string } {
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanIdentifier = identifier.trim();
 
-  if (!cleanEmail || !password) {
-    return { success: false, error: 'Por favor, preencha o e-mail e a senha.' };
+  if (!cleanIdentifier || !password) {
+    return { success: false, error: 'Por favor, preencha o nome de usuário (ou e-mail) e a senha.' };
   }
 
   const users = getRegisteredUsers();
-  const foundUser = users.find(u => u.email.toLowerCase() === cleanEmail);
+  const foundUser = findUserByIdentifier(users, cleanIdentifier);
 
   if (!foundUser) {
-    return { success: false, error: 'E-mail não encontrado no sistema. Entre em contato com o Administrador para cadastrar seu acesso.' };
+    return {
+      success: false,
+      error: 'Usuário ou e-mail não encontrado no sistema. Entre em contato com o Administrador para cadastrar seu acesso.'
+    };
   }
 
   if (!verifyPassword(password, foundUser.passwordHash)) {
@@ -310,22 +437,23 @@ export function logoutUser(): void {
 }
 
 export function resetUserPassword(
-  email: string,
+  identifier: string,
   newPassword: string
 ): { success: boolean; error?: string } {
-  const cleanEmail = email.trim().toLowerCase();
-  if (!cleanEmail || !newPassword) {
-    return { success: false, error: 'Preencha o e-mail e a nova senha.' };
+  const cleanIdentifier = identifier.trim();
+  if (!cleanIdentifier || !newPassword) {
+    return { success: false, error: 'Preencha o nome de usuário (ou e-mail) e a nova senha.' };
   }
   if (newPassword.length < 6) {
     return { success: false, error: 'A nova senha deve ter pelo menos 6 caracteres.' };
   }
 
   const users = getRegisteredUsers();
-  const userIndex = users.findIndex(u => u.email.toLowerCase() === cleanEmail);
+  const matched = findUserByIdentifier(users, cleanIdentifier);
+  const userIndex = matched ? users.findIndex(u => u.id === matched.id) : -1;
 
   if (userIndex === -1) {
-    return { success: false, error: 'Nenhum usuário cadastrado com este e-mail foi encontrado.' };
+    return { success: false, error: 'Nenhum usuário cadastrado com este nome de usuário ou e-mail foi encontrado.' };
   }
 
   users[userIndex].passwordHash = hashPassword(newPassword);
@@ -333,7 +461,7 @@ export function resetUserPassword(
 
   // If current session is this user, update it
   const current = getCurrentUser();
-  if (current && current.email.toLowerCase() === cleanEmail) {
+  if (current && current.id === users[userIndex].id) {
     setCurrentUser(users[userIndex]);
   }
 
@@ -342,7 +470,7 @@ export function resetUserPassword(
 
 export function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<User, 'name' | 'email' | 'role' | 'roleLabel' | 'schoolName' | 'phone' | 'assignedClassIds'>>
+  updates: Partial<Pick<User, 'name' | 'username' | 'email' | 'role' | 'roleLabel' | 'schoolName' | 'phone' | 'assignedClassIds'>>
 ): { success: boolean; user?: User; error?: string } {
   const users = getRegisteredUsers();
   const idx = users.findIndex(u => u.id === userId);
@@ -350,20 +478,48 @@ export function updateUserProfile(
     return { success: false, error: 'Usuário não encontrado.' };
   }
 
-  if (updates.email) {
-    const cleanEmail = updates.email.trim().toLowerCase();
-    const conflict = users.some(u => u.id !== userId && u.email.toLowerCase() === cleanEmail);
-    if (conflict) {
-      return { success: false, error: 'Este e-mail já está sendo utilizado por outro usuário.' };
+  const nextUpdates = { ...updates };
+
+  if (nextUpdates.username !== undefined) {
+    const cleanUsername = nextUpdates.username.trim().replace(/^@+/, '').toLowerCase();
+    if (!cleanUsername) {
+      return { success: false, error: 'O nome de usuário não pode ficar vazio.' };
     }
-    updates.email = cleanEmail;
+    if (/\s/.test(cleanUsername)) {
+      return { success: false, error: 'O nome de usuário não pode conter espaços.' };
+    }
+    const usernameConflict = users.some(
+      u => u.id !== userId && u.username?.toLowerCase() === cleanUsername
+    );
+    if (usernameConflict) {
+      return { success: false, error: 'Este nome de usuário já está sendo utilizado por outro usuário.' };
+    }
+    nextUpdates.username = cleanUsername;
   }
 
-  const updatedUser: User = {
+  if (nextUpdates.email !== undefined) {
+    const cleanEmail = nextUpdates.email.trim().toLowerCase();
+    if (cleanEmail) {
+      if (!cleanEmail.includes('@')) {
+        return { success: false, error: 'Informe um e-mail válido.' };
+      }
+      const conflict = users.some(u => u.id !== userId && u.email.toLowerCase() === cleanEmail);
+      if (conflict) {
+        return { success: false, error: 'Este e-mail já está sendo utilizado por outro usuário.' };
+      }
+      nextUpdates.email = cleanEmail;
+    } else {
+      const baseUsername =
+        nextUpdates.username || users[idx].username || suggestUsernameFromName(nextUpdates.name || users[idx].name);
+      nextUpdates.email = `${baseUsername}@escola.local`;
+    }
+  }
+
+  const updatedUser: User = hydrateUser({
     ...users[idx],
-    ...updates,
-    name: updates.name ? updates.name.trim() : users[idx].name
-  };
+    ...nextUpdates,
+    name: nextUpdates.name ? nextUpdates.name.trim() : users[idx].name
+  });
 
   users[idx] = updatedUser;
   saveRegisteredUsers(users);
@@ -378,7 +534,7 @@ export function updateUserProfile(
 
 /**
  * Merges recovered or imported users into the active registered users list
- * without overwriting custom modifications, ensuring no duplicates by email/ID.
+ * without overwriting custom modifications, ensuring no duplicates by email/username/ID.
  */
 export function mergeRecoveredUsers(incomingUsers: User[]): { updatedCount: number; totalUsers: User[] } {
   if (!Array.isArray(incomingUsers) || incomingUsers.length === 0) {
@@ -388,30 +544,40 @@ export function mergeRecoveredUsers(incomingUsers: User[]): { updatedCount: numb
   const current = getRegisteredUsers();
   const currentMap = new Map<string, User>();
   const emailMap = new Map<string, User>();
+  const usernameMap = new Map<string, User>();
 
   current.forEach(u => {
     currentMap.set(u.id, u);
-    emailMap.set(u.email.toLowerCase(), u);
+    if (u.email) emailMap.set(u.email.toLowerCase(), u);
+    if (u.username) usernameMap.set(u.username.toLowerCase(), u);
   });
 
   let restoredCount = 0;
 
-  incomingUsers.forEach(incoming => {
-    if (!incoming || !incoming.email) return;
+  incomingUsers.forEach(rawIncoming => {
+    if (!rawIncoming || !rawIncoming.name || (!rawIncoming.email && !rawIncoming.username)) return;
+    const incoming = hydrateUser(rawIncoming);
     const cleanEmail = incoming.email.toLowerCase();
-    
-    // Check if exists by ID or email
+    const cleanUsername = (incoming.username || '').toLowerCase();
+
+    // Check if exists by ID, username, or email
     const existingById = currentMap.get(incoming.id);
+    const existingByUsername = cleanUsername ? usernameMap.get(cleanUsername) : undefined;
     const existingByEmail = emailMap.get(cleanEmail);
 
-    if (!existingById && !existingByEmail) {
+    if (!existingById && !existingByUsername && !existingByEmail) {
       currentMap.set(incoming.id, incoming);
       emailMap.set(cleanEmail, incoming);
+      if (cleanUsername) usernameMap.set(cleanUsername, incoming);
       restoredCount++;
     } else {
-      // If existing exists but missing fields like assigned classes or phone, merge them
-      const target = existingById || existingByEmail!;
+      // If existing exists but missing fields like username, assigned classes or phone, merge them
+      const target = existingById || existingByUsername || existingByEmail!;
       let modified = false;
+      if (!target.username && incoming.username) {
+        target.username = incoming.username;
+        modified = true;
+      }
       if (!target.phone && incoming.phone) {
         target.phone = incoming.phone;
         modified = true;
@@ -488,14 +654,14 @@ export async function recoverUsersFromCloud(emailsToCheck?: string[]): Promise<{
             // If it is directly an array of Users
             if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.role) {
               parsed.forEach((u: any) => {
-                if (u && u.email && u.name) collectedUsers.push(u);
+                if (u && u.name && (u.username || u.email)) collectedUsers.push(u);
               });
               foundSources.push(`Nuvem Firestore: documento "${key}" (${parsed.length} usuários)`);
             }
             // If it is AppDataState containing users or other metadata
             else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.users)) {
               parsed.users.forEach((u: any) => {
-                if (u && u.email && u.name) collectedUsers.push(u);
+                if (u && u.name && (u.username || u.email)) collectedUsers.push(u);
               });
               foundSources.push(`Nuvem Firestore: payload "${key}" (${parsed.users.length} usuários)`);
             }

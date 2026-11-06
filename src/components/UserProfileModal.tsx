@@ -11,10 +11,11 @@ import {
   CheckCircle2,
   AlertCircle,
   LogOut,
-  Calendar
+  Calendar,
+  AtSign
 } from 'lucide-react';
 import { User } from '../types';
-import { updateUserProfile, resetUserPassword } from '../utils/auth';
+import { updateUserProfile, resetUserPassword, suggestUsernameFromName } from '../utils/auth';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -35,7 +36,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   // Profile fields
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [username, setUsername] = useState(user.username || suggestUsernameFromName(user.name));
+  const [email, setEmail] = useState(user.email.endsWith('@escola.local') ? '' : user.email);
   const [roleLabel, setRoleLabel] = useState(user.roleLabel || (user.role === 'admin' ? 'Administrador Escolar' : 'Professor(a)'));
   const [schoolName, setSchoolName] = useState(user.schoolName || '');
   const [phone, setPhone] = useState(user.phone || '');
@@ -57,6 +59,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
     const result = updateUserProfile(user.id, {
       name,
+      username,
       email,
       role: user.role,
       roleLabel,
@@ -88,7 +91,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       return;
     }
 
-    const res = resetUserPassword(user.email, newPassword);
+    const res = resetUserPassword(user.username || user.email, newPassword);
     if (res.success) {
       setSuccessMsg('Senha alterada com sucesso!');
       setNewPassword('');
@@ -133,7 +136,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 {user.name}
               </h3>
               <p className="text-xs text-indigo-200 mt-0.5">
-                {user.role} {user.schoolName ? `• ${user.schoolName}` : ''}
+                @{user.username || suggestUsernameFromName(user.name)} • {user.role} {user.schoolName ? `• ${user.schoolName}` : ''}
               </p>
               <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400">
                 <span className="flex items-center gap-1">
@@ -213,19 +216,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  E-mail de Acesso
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Nome de Usuário (Login)
+                  </label>
+                  <div className="relative">
+                    <AtSign className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.replace(/\s+/g, '').toLowerCase())}
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-semibold text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    E-mail de Acesso (Opcional)
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      placeholder="seu.email@escola.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -21,7 +21,8 @@ import {
   AlertTriangle,
   Settings,
   Database,
-  Download
+  Download,
+  User as UserIcon
 } from 'lucide-react';
 import { User } from '../types';
 import { loginUser, resetUserPassword, getRegisteredUsers } from '../utils/auth';
@@ -39,6 +40,7 @@ interface AuthScreenProps {
 }
 
 type AuthMode = 'login' | 'forgot';
+type LoginMethod = 'username' | 'email';
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({
   onLoginSuccess,
@@ -50,18 +52,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onOpenRecoveryModal
 }) => {
   const [mode, setMode] = useState<AuthMode>('login');
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('username');
 
   // Registered users state for quick login selection
   const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => getRegisteredUsers());
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState('professor@escola.com');
+  const [loginIdentifier, setLoginIdentifier] = useState('professor');
   const [loginPassword, setLoginPassword] = useState('123456');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Forgot password state
-  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [showForgotPass, setShowForgotPass] = useState(false);
@@ -123,6 +126,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   };
 
+  // Switch between Username and Email login mode
+  const handleSwitchLoginMethod = (method: LoginMethod) => {
+    if (method === loginMethod) return;
+    setLoginMethod(method);
+    setErrorMessage(null);
+
+    const trimmed = loginIdentifier.trim();
+    const matched = registeredUsers.find(
+      (u) =>
+        u.username?.toLowerCase() === trimmed.replace(/^@+/, '').toLowerCase() ||
+        u.email.toLowerCase() === trimmed.toLowerCase() ||
+        u.name.toLowerCase() === trimmed.toLowerCase()
+    );
+
+    if (matched) {
+      setLoginIdentifier(method === 'username' ? matched.username || matched.name : matched.email);
+    } else if (method === 'username' && trimmed.includes('@')) {
+      setLoginIdentifier(trimmed.split('@')[0]);
+    } else if (method === 'email' && trimmed && !trimmed.includes('@')) {
+      setLoginIdentifier(`${trimmed}@escola.com`);
+    }
+  };
+
   // Handle Login Submit
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +156,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setIsLoading(true);
 
     try {
-      const result = loginUser(loginEmail, loginPassword);
+      const result = loginUser(loginIdentifier, loginPassword);
       if (result.success && result.user) {
         setSuccessMessage(`Bem-vindo(a), ${result.user.name}!`);
         setTimeout(() => {
@@ -148,13 +174,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   // Quick Demo Logins
   const handleDemoAdmin = () => {
-    setLoginEmail('admin@escola.com');
+    const target = loginMethod === 'username' ? 'admin' : 'admin@escola.com';
+    setLoginIdentifier(target);
     setLoginPassword('admin123');
     setErrorMessage(null);
     setIsLoading(true);
 
     setTimeout(() => {
-      const result = loginUser('admin@escola.com', 'admin123');
+      const result = loginUser('admin', 'admin123');
       if (result.success && result.user) {
         onLoginSuccess(result.user);
       } else {
@@ -165,13 +192,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   const handleDemoTeacher = () => {
-    setLoginEmail('professor@escola.com');
+    const target = loginMethod === 'username' ? 'professor' : 'professor@escola.com';
+    setLoginIdentifier(target);
     setLoginPassword('123456');
     setErrorMessage(null);
     setIsLoading(true);
 
     setTimeout(() => {
-      const result = loginUser('professor@escola.com', '123456');
+      const result = loginUser('professor', '123456');
       if (result.success && result.user) {
         onLoginSuccess(result.user);
       } else {
@@ -199,10 +227,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setIsLoading(true);
 
     try {
-      const result = resetUserPassword(forgotEmail, forgotNewPassword);
+      const result = resetUserPassword(forgotIdentifier, forgotNewPassword);
       if (result.success) {
         setSuccessMessage('Senha redefinida com sucesso! Você já pode entrar com sua nova senha.');
-        setLoginEmail(forgotEmail);
+        setLoginIdentifier(forgotIdentifier);
         setLoginPassword(forgotNewPassword);
         setTimeout(() => {
           setMode('login');
@@ -434,21 +462,63 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             {/* ======================= MODE: LOGIN ======================= */}
             {mode === 'login' ? (
               <form onSubmit={handleLoginSubmit} className="space-y-4">
+                {/* Auth Method Selector: Username vs Email */}
+                <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchLoginMethod('username')}
+                    className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      loginMethod === 'username'
+                        ? 'bg-white text-indigo-700 shadow-xs border border-indigo-100'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>Nome de Usuário</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchLoginMethod('email')}
+                    className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      loginMethod === 'email'
+                        ? 'bg-white text-indigo-700 shadow-xs border border-indigo-100'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>E-mail</span>
+                  </button>
+                </div>
+
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
-                    E-mail de Acesso
+                    {loginMethod === 'username' ? 'Nome de Usuário' : 'E-mail de Acesso'}
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    {loginMethod === 'username' ? (
+                      <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    ) : (
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    )}
                     <input
-                      type="email"
+                      type={loginMethod === 'username' ? 'text' : 'email'}
+                      autoComplete={loginMethod === 'username' ? 'username' : 'email'}
                       required
-                      placeholder="seu.email@escola.com"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder={
+                        loginMethod === 'username'
+                          ? 'Ex: professor, admin ou seu nome'
+                          : 'seu.email@escola.com'
+                      }
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
                       className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
                     />
                   </div>
+                  {loginMethod === 'username' && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Entre com seu usuário (ex: <span className="font-mono text-slate-600">professor</span>), nome completo ou e-mail.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -461,6 +531,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       onClick={() => {
                         setErrorMessage(null);
                         setSuccessMessage(null);
+                        setForgotIdentifier(loginIdentifier);
                         setMode('forgot');
                       }}
                       className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
@@ -581,27 +652,46 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       <span className="text-[10px] text-slate-400 font-normal">clique para preencher</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                      {registeredUsers.map((u) => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => {
-                            setLoginEmail(u.email);
-                            if (u.email === 'admin@escola.com') setLoginPassword('admin123');
-                            else if (u.email === 'professor@escola.com') setLoginPassword('123456');
-                          }}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition cursor-pointer flex items-center gap-1 truncate max-w-full ${
-                            loginEmail === u.email
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                          }`}
-                          title={`Clique para selecionar ${u.name} (${u.email})`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${u.role === 'admin' ? 'bg-indigo-400' : 'bg-emerald-400'}`}></span>
-                          <span className="truncate">{u.name}</span>
-                          <span className="text-[9px] opacity-75 font-mono">({u.role === 'admin' ? 'Adm' : 'Prof'})</span>
-                        </button>
-                      ))}
+                      {registeredUsers.map((u) => {
+                        const normalizedInput = loginIdentifier.trim().replace(/^@+/, '').toLowerCase();
+                        const isSelected =
+                          (u.username && normalizedInput === u.username.toLowerCase()) ||
+                          normalizedInput === u.email.toLowerCase() ||
+                          normalizedInput === u.name.toLowerCase();
+
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              setLoginIdentifier(
+                                loginMethod === 'username' ? u.username || u.name : u.email
+                              );
+                              if (u.username === 'admin' || u.email === 'admin@escola.com') {
+                                setLoginPassword('admin123');
+                              } else if (u.username === 'professor' || u.email === 'professor@escola.com') {
+                                setLoginPassword('123456');
+                              }
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-medium border transition cursor-pointer flex items-center gap-1 truncate max-w-full ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                            }`}
+                            title={`Clique para selecionar ${u.name} (@${u.username || 'usuario'})`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                u.role === 'admin' ? 'bg-indigo-400' : 'bg-emerald-400'
+                              }`}
+                            ></span>
+                            <span className="truncate">{u.name}</span>
+                            {u.username && (
+                              <span className="text-[9px] opacity-80 font-mono">@{u.username}</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -634,8 +724,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     </button>
                   </div>
                   <div className="text-[10px] text-slate-400 text-center space-y-0.5">
-                    <div>Admin: <span className="font-mono text-slate-600">admin@escola.com</span> / senha: <span className="font-mono text-slate-600">admin123</span></div>
-                    <div>Professor: <span className="font-mono text-slate-600">professor@escola.com</span> / senha: <span className="font-mono text-slate-600">123456</span></div>
+                    {loginMethod === 'username' ? (
+                      <>
+                        <div>
+                          Admin: usuário <span className="font-mono text-slate-600 font-semibold">admin</span> / senha:{' '}
+                          <span className="font-mono text-slate-600">admin123</span>
+                        </div>
+                        <div>
+                          Professor: usuário <span className="font-mono text-slate-600 font-semibold">professor</span> / senha:{' '}
+                          <span className="font-mono text-slate-600">123456</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          Admin: <span className="font-mono text-slate-600">admin@escola.com</span> / senha:{' '}
+                          <span className="font-mono text-slate-600">admin123</span>
+                        </div>
+                        <div>
+                          Professor: <span className="font-mono text-slate-600">professor@escola.com</span> / senha:{' '}
+                          <span className="font-mono text-slate-600">123456</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </form>
@@ -645,22 +756,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-indigo-950 text-xs flex items-start gap-2">
                   <HelpCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                   <div>
-                    Digite seu e-mail cadastrado e informe uma nova senha de no mínimo 6 caracteres.
+                    Digite seu nome de usuário (ou e-mail) cadastrado e informe uma nova senha de no mínimo 6 caracteres.
                   </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
-                    E-mail do Usuário
+                    Nome de Usuário ou E-mail
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
-                      type="email"
+                      type="text"
                       required
-                      placeholder="seu.email@escola.com"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="Ex: professor ou seu.email@escola.com"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
                       className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
                     />
                   </div>

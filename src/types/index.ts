@@ -161,6 +161,7 @@ export type UserRole = 'admin' | 'professor';
 export interface User {
   id: string;
   name: string;
+  username?: string;
   email: string;
   role: UserRole; // 'admin' ou 'professor'
   roleLabel?: string; // ex: Administrador do Sistema, Professor de Matemática

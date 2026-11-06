@@ -18,7 +18,8 @@ import {
   Calendar,
   Layers,
   CheckSquare,
-  RotateCcw
+  RotateCcw,
+  AtSign
 } from 'lucide-react';
 import { User, UserRole, ClassRoom } from '../types';
 import {
@@ -26,7 +27,8 @@ import {
   registerUserByAdmin,
   deleteUserByAdmin,
   resetUserPassword,
-  updateUserProfile
+  updateUserProfile,
+  suggestUsernameFromName
 } from '../utils/auth';
 import { pushUsersToCloud } from '../utils/cloudSync';
 import { ConfirmModal } from './ConfirmModal';
@@ -57,6 +59,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   // Form: New User
   const [newName, setNewName] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [isUsernameManuallyEdited, setIsUsernameManuallyEdited] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('professor');
   const [newRoleLabel, setNewRoleLabel] = useState('Professor(a) de ');
@@ -81,6 +85,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const handleOpenAdd = () => {
     setNewName('');
+    setNewUsername('');
+    setIsUsernameManuallyEdited(false);
     setNewEmail('');
     setNewRole('professor');
     setNewRoleLabel('Professor(a) de ');
@@ -121,6 +127,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
     const result = registerUserByAdmin({
       name: newName,
+      username: newUsername,
       email: newEmail,
       password: newPassword,
       role: newRole,
@@ -131,7 +138,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     });
 
     if (result.success && result.user) {
-      setSuccessMsg(`Usuário "${result.user.name}" cadastrado com sucesso!`);
+      setSuccessMsg(
+        `Usuário "${result.user.name}" (@${result.user.username}) cadastrado com sucesso!`
+      );
       setIsAddModalOpen(false);
       refreshUsers();
       setTimeout(() => setSuccessMsg(null), 4000);
@@ -157,7 +166,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const handleResetPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userToResetPass) return;
-    const res = resetUserPassword(userToResetPass.email, newPassInput);
+    const res = resetUserPassword(userToResetPass.username || userToResetPass.email, newPassInput);
     if (res.success) {
       setSuccessMsg(`Senha do usuário "${userToResetPass.name}" redefinida para "${newPassInput}".`);
       setUserToResetPass(null);
@@ -172,9 +181,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = u.name.toLowerCase().includes(q);
+      const matchUsername = (u.username || '').toLowerCase().includes(q);
       const matchEmail = u.email.toLowerCase().includes(q);
       const matchRole = (u.roleLabel || u.role).toLowerCase().includes(q);
-      if (!matchName && !matchEmail && !matchRole) return false;
+      if (!matchName && !matchUsername && !matchEmail && !matchRole) return false;
     }
     return true;
   });
@@ -241,7 +251,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar por nome, e-mail ou disciplina..."
+            placeholder="Buscar por nome, usuário, e-mail..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -322,9 +332,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
-                        <Mail className="w-3 h-3 text-slate-400" />
-                        <span className="font-mono text-[11px]">{u.email}</span>
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-slate-500 mt-1">
+                        <span className="inline-flex items-center gap-0.5 font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
+                          @{u.username || suggestUsernameFromName(u.name)}
+                        </span>
+                        {u.email && !u.email.endsWith('@escola.local') && (
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] truncate">
+                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{u.email}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -460,23 +477,56 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   required
                   placeholder="Ex: Prof. Roberto Miranda"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewName(val);
+                    if (!isUsernameManuallyEdited) {
+                      setNewUsername(val.trim() ? suggestUsernameFromName(val) : '');
+                    }
+                  }}
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  E-mail de Acesso (Login) *
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="roberto.miranda@escola.com"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Nome de Usuário (Login) *
+                  </label>
+                  <div className="relative">
+                    <AtSign className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: roberto.miranda"
+                      value={newUsername}
+                      onChange={(e) => {
+                        setIsUsernameManuallyEdited(true);
+                        setNewUsername(e.target.value.replace(/\s+/g, '').toLowerCase());
+                      }}
+                      className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-semibold"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Usado para acessar o sistema.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    E-mail (Opcional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="roberto.miranda@escola.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Opcional se o login for por usuário.
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -783,7 +833,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
               Redefinir Senha de Acesso
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Informe a nova senha para o usuário <strong>{userToResetPass.name}</strong> ({userToResetPass.email}):
+              Informe a nova senha para o usuário <strong>{userToResetPass.name}</strong> (@{userToResetPass.username || suggestUsernameFromName(userToResetPass.name)}):
             </p>
 
             <form onSubmit={handleResetPassword} className="space-y-4">
@@ -825,7 +875,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       <ConfirmModal
         isOpen={!!userToDelete}
         title="Excluir Usuário do Sistema?"
-        message={`Deseja realmente remover o acesso de "${userToDelete?.name}" (${userToDelete?.email})? Este usuário não poderá mais acessar o diário.`}
+        message={`Deseja realmente remover o acesso de "${userToDelete?.name}" (@${userToDelete?.username || ''})? Este usuário não poderá mais acessar o diário.`}
         confirmLabel="Sim, Excluir Usuário"
         cancelLabel="Cancelar"
         isDestructive={true}
