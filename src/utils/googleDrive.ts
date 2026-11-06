@@ -1,5 +1,9 @@
 import { AppDataState } from './storage';
-import { requestDriveAccessToken, getGoogleAccessToken } from '../firebase';
+import {
+  requestDriveAccessToken,
+  setCachedGoogleAccessToken,
+  DriveAuthError
+} from '../firebase';
 import { getRegisteredUsers, mergeRecoveredUsers } from './auth';
 
 export interface DriveBackupFile {
@@ -21,20 +25,11 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * Uploads a complete snapshot of the AppDataState directly to Google Drive
- */
-export async function uploadBackupToGoogleDrive(
-  data: AppDataState,
-  preferredEmail?: string
-): Promise<DriveBackupFile> {
-  const token = await requestDriveAccessToken(preferredEmail);
-
+export function createBackupSnapshotPayload(data: AppDataState) {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}h${pad(now.getMinutes())}`;
   const filename = `Diario_do_Professor_Backup_${dateStr}.json`;
-
   const registeredUsers = getRegisteredUsers();
 
   const payload = {
@@ -67,6 +62,56 @@ export async function uploadBackupToGoogleDrive(
     lastModified: Date.now()
   };
 
+  return { now, filename, registeredUsers, payload };
+}
+
+/**
+ * Downloads a complete snapshot directly to the user's device as a .json file
+ */
+export function exportBackupJsonFile(data: AppDataState): string {
+  const { filename, payload } = createBackupSnapshotPayload(data);
+  const jsonString = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return filename;
+}
+
+async function handleDriveHttpError(response: Response, fallbackPrefix: string): Promise<never> {
+  if (response.status === 401) {
+    setCachedGoogleAccessToken(null);
+    throw new DriveAuthError(
+      'expired',
+      'A sessão com o Google Drive expirou ou foi revogada. Clique em "Entrar com o Google" para reconectar.'
+    );
+  }
+  const errorText = await response.text().catch(() => '');
+  let parsedMessage = '';
+  try {
+    const jsonErr = JSON.parse(errorText);
+    parsedMessage = jsonErr?.error?.message || '';
+  } catch (_) {}
+
+  console.error('Drive API error:', response.status, errorText);
+  throw new Error(`${fallbackPrefix} (${response.status}): ${parsedMessage || 'Verifique sua conexão e tente novamente.'}`);
+}
+
+/**
+ * Uploads a complete snapshot of the AppDataState directly to Google Drive
+ */
+export async function uploadBackupToGoogleDrive(
+  data: AppDataState,
+  _preferredEmail?: string
+): Promise<DriveBackupFile> {
+  const token = await requestDriveAccessToken();
+  const { now, filename, registeredUsers, payload } = createBackupSnapshotPayload(data);
+
   const fileContent = JSON.stringify(payload, null, 2);
   const metadata = {
     name: filename,
@@ -97,9 +142,7 @@ export async function uploadBackupToGoogleDrive(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Drive upload error:', response.status, errorText);
-    throw new Error(`Falha no upload para o Google Drive (${response.status}): ${errorText}`);
+    await handleDriveHttpError(response, 'Falha no upload para o Google Drive');
   }
 
   const result = await response.json();
@@ -119,8 +162,8 @@ export async function uploadBackupToGoogleDrive(
 /**
  * Lists backup files found in the user's Google Drive
  */
-export async function listGoogleDriveBackups(preferredEmail?: string): Promise<DriveBackupFile[]> {
-  const token = await requestDriveAccessToken(preferredEmail);
+export async function listGoogleDriveBackups(_preferredEmail?: string): Promise<DriveBackupFile[]> {
+  const token = await requestDriveAccessToken();
 
   // Search query: non-trashed files that contain 'Diario' or 'diario' or 'Backup' in name, or json files
   const query = "trashed = false and (name contains 'Diario' or name contains 'diario' or name contains 'Backup' or mimeType = 'application/json')";
@@ -135,9 +178,7 @@ export async function listGoogleDriveBackups(preferredEmail?: string): Promise<D
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Drive list error:', response.status, errorText);
-    throw new Error(`Falha ao buscar backups no Google Drive (${response.status}): ${errorText}`);
+    await handleDriveHttpError(response, 'Falha ao buscar backups no Google Drive');
   }
 
   const data = await response.json();
@@ -164,9 +205,9 @@ export async function listGoogleDriveBackups(preferredEmail?: string): Promise<D
  */
 export async function downloadBackupFromGoogleDrive(
   fileId: string,
-  preferredEmail?: string
+  _preferredEmail?: string
 ): Promise<{ data: AppDataState; metadata: { name?: string; exportedAt?: string; restoredUsersCount?: number } }> {
-  const token = await requestDriveAccessToken(preferredEmail);
+  const token = await requestDriveAccessToken();
 
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
     method: 'GET',
@@ -176,9 +217,7 @@ export async function downloadBackupFromGoogleDrive(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Drive download error:', response.status, errorText);
-    throw new Error(`Falha ao baixar o arquivo do Google Drive (${response.status}): ${errorText}`);
+    await handleDriveHttpError(response, 'Falha ao baixar o arquivo do Google Drive');
   }
 
   const jsonText = await response.text();
@@ -238,9 +277,9 @@ export async function downloadBackupFromGoogleDrive(
  */
 export async function deleteBackupFromGoogleDrive(
   fileId: string,
-  preferredEmail?: string
+  _preferredEmail?: string
 ): Promise<void> {
-  const token = await requestDriveAccessToken(preferredEmail);
+  const token = await requestDriveAccessToken();
 
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
     method: 'DELETE',
@@ -250,7 +289,6 @@ export async function deleteBackupFromGoogleDrive(
   });
 
   if (!response.ok && response.status !== 404) {
-    const errorText = await response.text();
-    throw new Error(`Falha ao excluir arquivo do Google Drive (${response.status}): ${errorText}`);
+    await handleDriveHttpError(response, 'Falha ao excluir arquivo do Google Drive');
   }
 }
