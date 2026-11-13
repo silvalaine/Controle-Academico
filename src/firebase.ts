@@ -1,5 +1,12 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut
+} from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -114,50 +121,18 @@ export const setCachedGoogleAccessToken = (token: string | null): void => {
   }
 };
 
-export function isGsiReady(): boolean {
-  return typeof window !== 'undefined' && Boolean((window as any).google?.accounts?.oauth2?.initTokenClient);
-}
+function buildDriveProvider(forceAccountSelect: boolean = true): GoogleAuthProvider {
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.file');
 
-let gsiLoadPromise: Promise<boolean> | null = null;
-
-export function preloadGoogleIdentityScript(): Promise<boolean> {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return Promise.resolve(false);
+  const customParams: Record<string, string> = {
+    prompt: forceAccountSelect ? 'select_account' : 'consent'
+  };
+  if (!forceAccountSelect && auth.currentUser?.email) {
+    customParams.login_hint = auth.currentUser.email;
   }
-  if (isGsiReady()) {
-    return Promise.resolve(true);
-  }
-  if (gsiLoadPromise) {
-    return gsiLoadPromise;
-  }
-
-  gsiLoadPromise = new Promise((resolve) => {
-    const existingScript = document.querySelector<HTMLScriptElement>('script[src^="https://accounts.google.com/gsi/client"]');
-    if (existingScript) {
-      const checkReady = () => {
-        if (isGsiReady()) {
-          resolve(true);
-          return true;
-        }
-        return false;
-      };
-      if (checkReady()) return;
-      existingScript.addEventListener('load', () => resolve(isGsiReady()), { once: true });
-      existingScript.addEventListener('error', () => resolve(false), { once: true });
-      setTimeout(() => resolve(isGsiReady()), 2500);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve(isGsiReady());
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-
-  return gsiLoadPromise;
+  provider.setCustomParameters(customParams);
+  return provider;
 }
 
 export function toDriveAuthError(err: any): DriveAuthError {
@@ -166,17 +141,22 @@ export function toDriveAuthError(err: any): DriveAuthError {
   }
   const code = String(err?.code || '').toLowerCase();
   const msg = String(err?.message || err || '');
+  const inIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   if (code === 'auth/popup-closed-by-user' || msg.includes('auth/popup-closed-by-user')) {
     return new DriveAuthError(
       'popup-closed',
-      'A janela de login do Google foi fechada antes de concluir a autorização. Se estiver usando o painel incorporado, tente "Conectar via OAuth Direto" ou clique em "Abrir em Nova Aba".'
+      inIframe
+        ? 'A janela de login do Google foi fechada antes de concluir a autorização. Como o sistema está aberto dentro do painel incorporado, clique em "Abrir em Nova Aba" para conectar sua conta Google normalmente.'
+        : 'A janela de login do Google foi fechada antes de concluir a autorização. Tente novamente ou use "Conectar sem Pop-up (Redirecionar)".'
     );
   }
   if (code === 'auth/popup-blocked' || msg.includes('auth/popup-blocked')) {
     return new DriveAuthError(
       'popup-blocked',
-      'O navegador bloqueou a abertura da janela de login do Google. Habilite os pop-ups para este site, use "Conectar via OAuth Direto" ou abra em uma nova aba.'
+      inIframe
+        ? 'O navegador bloqueou a janela de login do Google neste painel. Clique em "Abrir em Nova Aba" para conectar sem bloqueios.'
+        : 'O navegador bloqueou a abertura da janela de login do Google. Libere os pop-ups ou clique em "Conectar sem Pop-up (Redirecionar)".'
     );
   }
   if (code === 'auth/cancelled-popup-request' || msg.includes('auth/cancelled-popup-request')) {
@@ -188,7 +168,7 @@ export function toDriveAuthError(err: any): DriveAuthError {
   if (code === 'auth/unauthorized-domain' || msg.includes('auth/unauthorized-domain')) {
     return new DriveAuthError(
       'unauthorized-domain',
-      'Este endereço ainda não está autorizado no Firebase Auth. Use o botão "Conectar via OAuth Direto" ou abra o aplicativo em uma nova aba.'
+      'Este endereço ainda não está autorizado para login Google. Clique em "Abrir em Nova Aba" ou tente novamente.'
     );
   }
   if (
@@ -199,7 +179,9 @@ export function toDriveAuthError(err: any): DriveAuthError {
   ) {
     return new DriveAuthError(
       'popup-blocked',
-      'Este navegador restringiu o login incorporado neste painel. Clique em "Conectar via OAuth Direto" ou em "Abrir em Nova Aba" para concluir a conexão.'
+      inIframe
+        ? 'Este navegador restringiu o login incorporado dentro deste painel. Clique em "Abrir em Nova Aba" para conectar sua conta Google diretamente.'
+        : 'Não foi possível abrir o pop-up de login neste navegador. Use o botão "Conectar sem Pop-up (Redirecionar)".'
     );
   }
   if (code === 'auth/network-request-failed' || msg.includes('auth/network-request-failed')) {
@@ -214,150 +196,10 @@ export function toDriveAuthError(err: any): DriveAuthError {
   );
 }
 
-async function fetchDriveAccountInfo(accessToken: string): Promise<ConnectedGoogleAccount> {
-  try {
-    const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress,photoLink)', {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json?.user) {
-        return {
-          email: json.user.emailAddress || undefined,
-          displayName: json.user.displayName || undefined,
-          photoURL: json.user.photoLink || undefined
-        };
-      }
-    }
-  } catch (_) {
-    // Optional profile metadata
-  }
-  return {};
-}
-
-function requestAccessTokenViaGsi(
-  forceAccountSelect: boolean = true
-): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
-  const clientId = (firebaseConfig as any).oAuthClientId;
-  if (!clientId) {
-    return Promise.reject(new DriveAuthError('config', 'Client ID OAuth do Google não está configurado neste projeto.'));
-  }
-
-  const googleObj = typeof window !== 'undefined' ? (window as any).google : undefined;
-  if (!googleObj?.accounts?.oauth2?.initTokenClient) {
-    preloadGoogleIdentityScript();
-    return Promise.reject(
-      new DriveAuthError(
-        'popup-blocked',
-        'A biblioteca de autenticação direta do Google ainda está carregando ou foi bloqueada pelo navegador. Aguarde um instante e tente novamente ou abra o app em uma nova aba.'
-      )
-    );
-  }
-
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    try {
-      const tokenClient = googleObj.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: SCOPES.join(' '),
-        callback: async (tokenResponse: any) => {
-          if (settled) return;
-          settled = true;
-
-          if (tokenResponse?.error) {
-            if (tokenResponse.error === 'popup_closed_by_user' || tokenResponse.error === 'access_denied') {
-              reject(
-                new DriveAuthError(
-                  'popup-closed',
-                  'A autorização com o Google Drive foi cancelada ou a janela foi fechada antes da confirmação.'
-                )
-              );
-            } else if (tokenResponse.error === 'popup_failed_to_open') {
-              reject(
-                new DriveAuthError(
-                  'popup-blocked',
-                  'O navegador bloqueou a janela pop-up de autorização do Google. Libere os pop-ups e tente novamente.'
-                )
-              );
-            } else {
-              reject(
-                new DriveAuthError(
-                  'unknown',
-                  `Falha na autorização Google: ${tokenResponse.error_description || tokenResponse.error}`
-                )
-              );
-            }
-            return;
-          }
-
-          if (!tokenResponse?.access_token) {
-            reject(new DriveAuthError('unknown', 'O Google não retornou um token de acesso válido para o Drive.'));
-            return;
-          }
-
-          const accessToken = String(tokenResponse.access_token);
-          cachedAccessToken = accessToken;
-          authSource = 'gsi';
-
-          const account = await fetchDriveAccountInfo(accessToken);
-          cachedGoogleAccount = account;
-          resolve({ accessToken, account });
-        },
-        error_callback: (err: any) => {
-          if (settled) return;
-          settled = true;
-          const errType = String(err?.type || '');
-          if (errType === 'popup_closed') {
-            reject(
-              new DriveAuthError(
-                'popup-closed',
-                'A janela de login do Google foi fechada antes de concluir a autorização.'
-              )
-            );
-          } else if (errType === 'popup_failed_to_open') {
-            reject(
-              new DriveAuthError(
-                'popup-blocked',
-                'O navegador bloqueou a abertura da janela de login do Google. Libere os pop-ups ou clique em "Abrir em Nova Aba".'
-              )
-            );
-          } else {
-            reject(
-              new DriveAuthError(
-                'unknown',
-                `Erro ao abrir janela do Google: ${err?.message || errType || 'tente novamente'}`
-              )
-            );
-          }
-        }
-      });
-
-      tokenClient.requestAccessToken({
-        prompt: forceAccountSelect ? 'select_account' : ''
-      });
-    } catch (err: any) {
-      if (!settled) {
-        settled = true;
-        reject(new DriveAuthError('unknown', err?.message || 'Erro ao iniciar autenticação Google OAuth.'));
-      }
-    }
-  });
-}
-
 async function requestAccessTokenViaFirebase(
   forceAccountSelect: boolean = true
 ): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
-  const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive.file');
-
-  // Always allow selecting the user's own Google account instead of forcing a channel email
-  const customParams: Record<string, string> = {
-    prompt: forceAccountSelect ? 'select_account' : 'consent'
-  };
-  if (!forceAccountSelect && auth.currentUser?.email) {
-    customParams.login_hint = auth.currentUser.email;
-  }
-  provider.setCustomParameters(customParams);
+  const provider = buildDriveProvider(forceAccountSelect);
 
   try {
     const result = await signInWithPopup(auth, provider);
@@ -381,16 +223,56 @@ async function requestAccessTokenViaFirebase(
   }
 }
 
+export async function connectGoogleDriveViaRedirect(forceAccountSelect: boolean = true): Promise<void> {
+  const inIframe = typeof window !== 'undefined' && window.self !== window.top;
+  if (inIframe) {
+    throw new DriveAuthError(
+      'popup-blocked',
+      'O redirecionamento direto do Google precisa ser executado em uma aba própria. Clique em "Abrir em Nova Aba" para conectar.'
+    );
+  }
+  try {
+    sessionStorage.setItem('diario_pending_drive_redirect', '1');
+  } catch (_) {}
+  const provider = buildDriveProvider(forceAccountSelect);
+  await signInWithRedirect(auth, provider);
+}
+
+export async function checkGoogleRedirectResult(): Promise<{ accessToken: string; account: ConnectedGoogleAccount } | null> {
+  try {
+    const hasFlag = typeof window !== 'undefined' && sessionStorage.getItem('diario_pending_drive_redirect') === '1';
+    const result = await getRedirectResult(auth);
+    if (hasFlag) {
+      try {
+        sessionStorage.removeItem('diario_pending_drive_redirect');
+      } catch (_) {}
+    }
+    if (!result) return null;
+
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) return null;
+
+    const account: ConnectedGoogleAccount = {
+      email: result.user.email || undefined,
+      displayName: result.user.displayName || undefined,
+      photoURL: result.user.photoURL || undefined
+    };
+    cachedAccessToken = credential.accessToken;
+    cachedGoogleAccount = account;
+    authSource = 'firebase';
+    return { accessToken: cachedAccessToken, account };
+  } catch (err: any) {
+    try {
+      sessionStorage.removeItem('diario_pending_drive_redirect');
+    } catch (_) {}
+    throw toDriveAuthError(err);
+  }
+}
+
 export async function connectGoogleDrive(options?: {
   forceAccountSelect?: boolean;
-  preferDirectOAuth?: boolean;
 }): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
   const forceAccountSelect = options?.forceAccountSelect ?? true;
-  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
-  const useDirectOAuth =
-    options?.preferDirectOAuth !== undefined
-      ? options.preferDirectOAuth
-      : isIframe && isGsiReady();
 
   if (!forceAccountSelect && cachedAccessToken) {
     return {
@@ -406,9 +288,6 @@ export async function connectGoogleDrive(options?: {
   isSigningIn = true;
   pendingAuthPromise = (async () => {
     try {
-      if (useDirectOAuth) {
-        return await requestAccessTokenViaGsi(forceAccountSelect);
-      }
       return await requestAccessTokenViaFirebase(forceAccountSelect);
     } finally {
       isSigningIn = false;
@@ -448,18 +327,10 @@ export async function loginWithGoogle(): Promise<{ email: string; displayName?: 
 }
 
 export async function disconnectGoogleDrive(): Promise<void> {
-  const tokenToRevoke = cachedAccessToken;
   const currentSource = authSource;
   cachedAccessToken = null;
   cachedGoogleAccount = null;
   authSource = null;
-
-  try {
-    const googleObj = typeof window !== 'undefined' ? (window as any).google : undefined;
-    if (tokenToRevoke && googleObj?.accounts?.oauth2?.revoke) {
-      googleObj.accounts.oauth2.revoke(tokenToRevoke, () => {});
-    }
-  } catch (_) {}
 
   try {
     if (currentSource === 'firebase' || auth.currentUser) {

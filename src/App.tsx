@@ -60,7 +60,18 @@ export default function App() {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [syncEmail, setSyncEmailState] = useState<string>(() => getSyncEmail());
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(false);
+  const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    const shouldOpen = params.get('driveBackup') === '1' || sessionStorage.getItem('diario_pending_drive_redirect') === '1';
+    if (params.has('driveBackup')) {
+      params.delete('driveBackup');
+      const nextSearch = params.toString();
+      const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+    return shouldOpen;
+  });
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatusInfo>(() => ({
     synced: true,

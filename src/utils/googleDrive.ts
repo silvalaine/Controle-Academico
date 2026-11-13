@@ -236,6 +236,9 @@ export function parseBackupJsonText(jsonText: string): {
     selectedYearId: parsed.selectedYearId || parsed.academicYears?.[0]?.id || '',
     selectedClassId: parsed.selectedClassId || parsed.classes?.[0]?.id || '',
     selectedTerm: typeof parsed.selectedTerm === 'number' ? parsed.selectedTerm : 1,
+    deletedClassIds: Array.isArray(parsed.deletedClassIds) ? parsed.deletedClassIds : [],
+    deletedStudentIds: Array.isArray(parsed.deletedStudentIds) ? parsed.deletedStudentIds : [],
+    deletedYearIds: Array.isArray(parsed.deletedYearIds) ? parsed.deletedYearIds : [],
     lastModified: Date.now()
   };
 
