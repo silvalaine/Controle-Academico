@@ -152,68 +152,76 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      setStatusMessage(null);
-      let active = true;
+    if (!isOpen) return;
 
-      checkGoogleRedirectResult()
-        .then((redirectRes) => {
-          if (!active) return;
-          if (redirectRes.status === 'connected' && redirectRes.accessToken) {
-            setHasDriveToken(true);
-            setGoogleAccount(redirectRes.account || null);
-            setStatusMessage({
-              type: 'success',
-              text: redirectRes.account?.email
-                ? `Conta Google conectada (${redirectRes.account.email})! Agora você já pode salvar ou restaurar backups no Drive.`
-                : 'Conta Google conectada com sucesso!'
-            });
-            if (activeTab === 'restore') {
-              handleLoadBackups();
-            }
-            return;
-          }
-          if (redirectRes.status === 'dropped') {
-            setStatusMessage({
-              type: 'error',
-              text: 'O navegador bloqueou o retorno da sessão após o redirecionamento (cookies de terceiros bloqueados). Clique no ícone de ajustes (à esquerda do endereço https://) ou no ícone de olho cortado (à direita da barra) para permitir cookies de terceiros, ou use os botões .json locais.',
-              errorCode: 'popup-blocked'
-            });
-            return;
-          }
-          const token = getGoogleAccessToken();
-          setHasDriveToken(!!token);
-          setGoogleAccount(getConnectedGoogleUser());
-          if (activeTab === 'restore' && token && !hasLoadedBackups) {
+    setStatusMessage(null);
+    let active = true;
+
+    checkGoogleRedirectResult()
+      .then((redirectRes) => {
+        if (!active) return;
+        if (redirectRes.status === 'connected' && redirectRes.accessToken) {
+          setHasDriveToken(true);
+          setGoogleAccount(redirectRes.account || null);
+          setStatusMessage({
+            type: 'success',
+            text: redirectRes.account?.email
+              ? `Conta Google conectada (${redirectRes.account.email})! Agora você já pode salvar ou restaurar backups no Drive.`
+              : 'Conta Google conectada com sucesso!'
+          });
+          if (activeTab === 'restore') {
             handleLoadBackups();
           }
-        })
-        .catch((err) => {
-          if (!active) return;
-          const authErr = toDriveAuthError(err);
+          return;
+        }
+        if (redirectRes.status === 'dropped') {
           setStatusMessage({
             type: 'error',
-            text: authErr.message,
-            errorCode: authErr.code
+            text: 'O navegador bloqueou o retorno da sessão após o redirecionamento (cookies de terceiros bloqueados). Clique no ícone de ajustes (à esquerda do endereço https://) ou no ícone de olho cortado (à direita da barra) para permitir cookies de terceiros, ou use os botões .json locais.',
+            errorCode: 'popup-blocked'
           });
+          return;
+        }
+        const token = getGoogleAccessToken();
+        setHasDriveToken(!!token);
+        setGoogleAccount(getConnectedGoogleUser());
+      })
+      .catch((err) => {
+        if (!active) return;
+        const authErr = toDriveAuthError(err);
+        setStatusMessage({
+          type: 'error',
+          text: authErr.message,
+          errorCode: authErr.code
         });
+      });
 
-      return () => {
-        active = false;
-      };
+    return () => {
+      active = false;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'restore' && getGoogleAccessToken() && !hasLoadedBackups) {
+      handleLoadBackups();
     }
   }, [isOpen, activeTab]);
 
   if (!isOpen) return null;
 
   // Explicit Google Sign-In handler (must be called directly from user click)
-  const handleConnectGoogle = async (options?: { forceAccountSelect?: boolean; loadListAfter?: boolean }) => {
+  const handleConnectGoogle = async (options?: {
+    forceAccountSelect?: boolean;
+    loadListAfter?: boolean;
+    loginHint?: string;
+  }) => {
     setIsLoggingIn(true);
     setStatusMessage(null);
 
     try {
       const res = await connectGoogleDrive({
-        forceAccountSelect: options?.forceAccountSelect ?? true
+        forceAccountSelect: options?.forceAccountSelect ?? true,
+        loginHint: options?.loginHint
       });
       setHasDriveToken(true);
       setGoogleAccount(res.account);
@@ -241,11 +249,11 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
     }
   };
 
-  const handleConnectViaRedirect = async () => {
+  const handleConnectViaRedirect = async (loginHint?: string) => {
     setIsLoggingIn(true);
     setStatusMessage(null);
     try {
-      await connectGoogleDriveViaRedirect(true);
+      await connectGoogleDriveViaRedirect(true, loginHint);
     } catch (err: any) {
       const authErr = toDriveAuthError(err);
       setStatusMessage({
@@ -706,10 +714,25 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                   >
                     Tentar Novamente (Google)
                   </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleConnectGoogle({
+                        forceAccountSelect: true,
+                        loadListAfter: activeTab === 'restore',
+                        loginHint: 'lab.tecnologia.amparo@gmail.com'
+                      })
+                    }
+                    disabled={isLoggingIn || isLoading}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100/70 text-rose-900 border border-rose-300 font-bold text-[11px] transition cursor-pointer"
+                    title="Sugere entrar com a conta proprietária do projeto"
+                  >
+                    Usar lab.tecnologia.amparo@gmail.com
+                  </button>
                   {!isInsideIframe && (
                     <button
                       type="button"
-                      onClick={handleConnectViaRedirect}
+                      onClick={() => handleConnectViaRedirect()}
                       disabled={isLoggingIn || isLoading}
                       className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100/70 text-rose-900 border border-rose-300 font-bold text-[11px] transition cursor-pointer"
                       title="Conecta na mesma aba sem abrir pop-up"
@@ -737,21 +760,22 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                 </div>
 
                 <div className="text-[11px] text-rose-900/90 bg-white/75 border border-rose-200/80 rounded-xl p-2.5 leading-relaxed space-y-1">
-                  <p className="font-bold">Como resolver se o Google estiver bloqueando:</p>
+                  <p className="font-bold">Como resolver para conseguir conectar sua conta Google ao Drive:</p>
                   <ul className="list-disc pl-4 space-y-0.5">
                     <li>
                       <strong>App em modo de teste:</strong> se apareceu <em>"Acesso bloqueado"</em> ao usar outro Gmail (ex.: <code>laynesylva@gmail.com</code>), entre com <strong>lab.tecnologia.amparo@gmail.com</strong> ou adicione o e-mail desejado em{' '}
                       <a
-                        href="https://console.cloud.google.com/apis/credentials/consent?project=gen-lang-client-0320529022"
+                        href="https://console.cloud.google.com/auth/audience?project=gen-lang-client-0320529022"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline font-semibold text-indigo-700 hover:text-indigo-900"
                       >
-                        Usuários de teste no Google Cloud
-                      </a>.
+                        Público-alvo / Usuários de teste no Google Cloud
+                      </a>{' '}
+                      (ou clique em <em>Publicar aplicativo</em> nessa mesma tela).
                     </li>
                     <li>
-                      <strong>Cookies bloqueados pelo navegador:</strong> o Chrome e o Edge substituíram o antigo cadeado por um <strong>ícone de ajustes (duas barrinhas com bolinhas)</strong> à esquerda do endereço <code>https://</code> (ou um <strong>ícone de olho cortado</strong> à direita da barra). Clique nele → <em>Cookies e dados do site</em> (ou <em>Cookies de terceiros</em>) e ative a permissão para este site. Se estiver no painel do AI Studio, abra primeiro em uma aba própria.
+                      <strong>Cookies bloqueados pelo navegador:</strong> não use Guia Anônima e, se estiver no painel do AI Studio, clique em <strong>Abrir em Nova Aba</strong>. Na barra de endereço do Chrome/Edge, clique no <strong>ícone de ajustes</strong> à esquerda de <code>https://</code> (ou no <strong>ícone de olho cortado</strong> à direita) → ative <em>Cookies de terceiros</em> para este site.
                     </li>
                   </ul>
                 </div>
@@ -1019,7 +1043,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                     ) : (
                       <button
                         type="button"
-                        onClick={handleConnectViaRedirect}
+                        onClick={() => handleConnectViaRedirect()}
                         disabled={isLoggingIn || isLoading}
                         className="px-4 py-2 rounded-full border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
                       >

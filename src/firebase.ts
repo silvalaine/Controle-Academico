@@ -121,15 +121,16 @@ export const setCachedGoogleAccessToken = (token: string | null): void => {
   }
 };
 
-function buildDriveProvider(forceAccountSelect: boolean = true): GoogleAuthProvider {
+function buildDriveProvider(forceAccountSelect: boolean = true, loginHint?: string): GoogleAuthProvider {
   const provider = new GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/drive.file');
 
   const customParams: Record<string, string> = {
     prompt: forceAccountSelect ? 'select_account' : 'consent'
   };
-  if (!forceAccountSelect && auth.currentUser?.email) {
-    customParams.login_hint = auth.currentUser.email;
+  const hint = loginHint || (!forceAccountSelect ? auth.currentUser?.email || undefined : undefined);
+  if (hint) {
+    customParams.login_hint = hint;
   }
   provider.setCustomParameters(customParams);
   return provider;
@@ -197,9 +198,10 @@ export function toDriveAuthError(err: any): DriveAuthError {
 }
 
 async function requestAccessTokenViaFirebase(
-  forceAccountSelect: boolean = true
+  forceAccountSelect: boolean = true,
+  loginHint?: string
 ): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
-  const provider = buildDriveProvider(forceAccountSelect);
+  const provider = buildDriveProvider(forceAccountSelect, loginHint);
 
   try {
     const result = await signInWithPopup(auth, provider);
@@ -223,7 +225,10 @@ async function requestAccessTokenViaFirebase(
   }
 }
 
-export async function connectGoogleDriveViaRedirect(forceAccountSelect: boolean = true): Promise<void> {
+export async function connectGoogleDriveViaRedirect(
+  forceAccountSelect: boolean = true,
+  loginHint?: string
+): Promise<void> {
   const inIframe = typeof window !== 'undefined' && window.self !== window.top;
   if (inIframe) {
     throw new DriveAuthError(
@@ -234,7 +239,7 @@ export async function connectGoogleDriveViaRedirect(forceAccountSelect: boolean 
   try {
     sessionStorage.setItem('diario_pending_drive_redirect', '1');
   } catch (_) {}
-  const provider = buildDriveProvider(forceAccountSelect);
+  const provider = buildDriveProvider(forceAccountSelect, loginHint);
   await signInWithRedirect(auth, provider);
 }
 
@@ -280,8 +285,10 @@ export async function checkGoogleRedirectResult(): Promise<{
 
 export async function connectGoogleDrive(options?: {
   forceAccountSelect?: boolean;
+  loginHint?: string;
 }): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
   const forceAccountSelect = options?.forceAccountSelect ?? true;
+  const loginHint = options?.loginHint;
 
   if (!forceAccountSelect && cachedAccessToken) {
     return {
@@ -297,7 +304,7 @@ export async function connectGoogleDrive(options?: {
   isSigningIn = true;
   pendingAuthPromise = (async () => {
     try {
-      return await requestAccessTokenViaFirebase(forceAccountSelect);
+      return await requestAccessTokenViaFirebase(forceAccountSelect, loginHint);
     } finally {
       isSigningIn = false;
       pendingAuthPromise = null;
