@@ -201,34 +201,20 @@ export async function listGoogleDriveBackups(_preferredEmail?: string): Promise<
 }
 
 /**
- * Downloads and parses a backup file from Google Drive
+ * Validates and normalizes a backup JSON string exported by Diário do Professor
  */
-export async function downloadBackupFromGoogleDrive(
-  fileId: string,
-  _preferredEmail?: string
-): Promise<{ data: AppDataState; metadata: { name?: string; exportedAt?: string; restoredUsersCount?: number } }> {
-  const token = await requestDriveAccessToken();
-
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
-
-  if (!response.ok) {
-    await handleDriveHttpError(response, 'Falha ao baixar o arquivo do Google Drive');
-  }
-
-  const jsonText = await response.text();
+export function parseBackupJsonText(jsonText: string): {
+  data: AppDataState;
+  metadata: { name?: string; exportedAt?: string; restoredUsersCount?: number };
+} {
   let parsed: any;
   try {
     parsed = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error('O arquivo selecionado no Google Drive não possui formato JSON válido.');
+    throw new Error('O arquivo selecionado não possui formato JSON válido.');
   }
 
-  if (!parsed.academicYears || !parsed.classes || !parsed.students) {
+  if (!parsed || !Array.isArray(parsed.academicYears) || !Array.isArray(parsed.classes) || !Array.isArray(parsed.students)) {
     throw new Error('O arquivo selecionado não contém os dados esperados do Diário do Professor (anos letivos, turmas ou alunos ausentes).');
   }
 
@@ -253,12 +239,11 @@ export async function downloadBackupFromGoogleDrive(
     lastModified: Date.now()
   };
 
-  // If backup includes registered users, restore/merge them automatically
   if (Array.isArray(parsed.users) && parsed.users.length > 0) {
     try {
       mergeRecoveredUsers(parsed.users);
     } catch (err) {
-      console.warn('Erro ao restaurar usuários do backup do Drive:', err);
+      console.warn('Erro ao restaurar usuários do backup:', err);
     }
   }
 
@@ -270,6 +255,40 @@ export async function downloadBackupFromGoogleDrive(
       restoredUsersCount: Array.isArray(parsed.users) ? parsed.users.length : 0
     }
   };
+}
+
+/**
+ * Reads and parses a local .json backup file chosen by the user
+ */
+export async function importBackupJsonFile(
+  file: File
+): Promise<{ data: AppDataState; metadata: { name?: string; exportedAt?: string; restoredUsersCount?: number } }> {
+  const text = await file.text();
+  return parseBackupJsonText(text);
+}
+
+/**
+ * Downloads and parses a backup file from Google Drive
+ */
+export async function downloadBackupFromGoogleDrive(
+  fileId: string,
+  _preferredEmail?: string
+): Promise<{ data: AppDataState; metadata: { name?: string; exportedAt?: string; restoredUsersCount?: number } }> {
+  const token = await requestDriveAccessToken();
+
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    await handleDriveHttpError(response, 'Falha ao baixar o arquivo do Google Drive');
+  }
+
+  const jsonText = await response.text();
+  return parseBackupJsonText(jsonText);
 }
 
 /**

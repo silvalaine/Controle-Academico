@@ -114,6 +114,52 @@ export const setCachedGoogleAccessToken = (token: string | null): void => {
   }
 };
 
+export function isGsiReady(): boolean {
+  return typeof window !== 'undefined' && Boolean((window as any).google?.accounts?.oauth2?.initTokenClient);
+}
+
+let gsiLoadPromise: Promise<boolean> | null = null;
+
+export function preloadGoogleIdentityScript(): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve(false);
+  }
+  if (isGsiReady()) {
+    return Promise.resolve(true);
+  }
+  if (gsiLoadPromise) {
+    return gsiLoadPromise;
+  }
+
+  gsiLoadPromise = new Promise((resolve) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[src^="https://accounts.google.com/gsi/client"]');
+    if (existingScript) {
+      const checkReady = () => {
+        if (isGsiReady()) {
+          resolve(true);
+          return true;
+        }
+        return false;
+      };
+      if (checkReady()) return;
+      existingScript.addEventListener('load', () => resolve(isGsiReady()), { once: true });
+      existingScript.addEventListener('error', () => resolve(false), { once: true });
+      setTimeout(() => resolve(isGsiReady()), 2500);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(isGsiReady());
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+
+  return gsiLoadPromise;
+}
+
 export function toDriveAuthError(err: any): DriveAuthError {
   if (err instanceof DriveAuthError) {
     return err;
@@ -124,13 +170,13 @@ export function toDriveAuthError(err: any): DriveAuthError {
   if (code === 'auth/popup-closed-by-user' || msg.includes('auth/popup-closed-by-user')) {
     return new DriveAuthError(
       'popup-closed',
-      'A janela de login do Google foi fechada antes de concluir a autorização. Para conectar ao Google Drive, selecione sua conta Google na janela pop-up e clique em Permitir.'
+      'A janela de login do Google foi fechada antes de concluir a autorização. Se estiver usando o painel incorporado, tente "Conectar via OAuth Direto" ou clique em "Abrir em Nova Aba".'
     );
   }
   if (code === 'auth/popup-blocked' || msg.includes('auth/popup-blocked')) {
     return new DriveAuthError(
       'popup-blocked',
-      'O navegador bloqueou a abertura da janela de login do Google. Habilite os pop-ups para este site ou use o botão "OAuth Direto" abaixo.'
+      'O navegador bloqueou a abertura da janela de login do Google. Habilite os pop-ups para este site, use "Conectar via OAuth Direto" ou abra em uma nova aba.'
     );
   }
   if (code === 'auth/cancelled-popup-request' || msg.includes('auth/cancelled-popup-request')) {
@@ -142,7 +188,18 @@ export function toDriveAuthError(err: any): DriveAuthError {
   if (code === 'auth/unauthorized-domain' || msg.includes('auth/unauthorized-domain')) {
     return new DriveAuthError(
       'unauthorized-domain',
-      'Este endereço ainda não está autorizado no Firebase Auth. Use o botão "OAuth Direto" ou abra o aplicativo em uma nova aba.'
+      'Este endereço ainda não está autorizado no Firebase Auth. Use o botão "Conectar via OAuth Direto" ou abra o aplicativo em uma nova aba.'
+    );
+  }
+  if (
+    code === 'auth/operation-not-supported-in-this-environment' ||
+    msg.includes('auth/operation-not-supported-in-this-environment') ||
+    code === 'auth/internal-error' ||
+    msg.includes('auth/internal-error')
+  ) {
+    return new DriveAuthError(
+      'popup-blocked',
+      'Este navegador restringiu o login incorporado neste painel. Clique em "Conectar via OAuth Direto" ou em "Abrir em Nova Aba" para concluir a conexão.'
     );
   }
   if (code === 'auth/network-request-failed' || msg.includes('auth/network-request-failed')) {
@@ -178,19 +235,22 @@ async function fetchDriveAccountInfo(accessToken: string): Promise<ConnectedGoog
   return {};
 }
 
-async function requestAccessTokenViaGsi(
+function requestAccessTokenViaGsi(
   forceAccountSelect: boolean = true
 ): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
   const clientId = (firebaseConfig as any).oAuthClientId;
   if (!clientId) {
-    throw new DriveAuthError('config', 'Client ID OAuth do Google não está configurado neste projeto.');
+    return Promise.reject(new DriveAuthError('config', 'Client ID OAuth do Google não está configurado neste projeto.'));
   }
 
   const googleObj = typeof window !== 'undefined' ? (window as any).google : undefined;
   if (!googleObj?.accounts?.oauth2?.initTokenClient) {
-    throw new DriveAuthError(
-      'popup-blocked',
-      'A biblioteca de autenticação direta do Google ainda não foi carregada ou foi bloqueada pelo navegador. Tente novamente ou abra o app em uma nova aba.'
+    preloadGoogleIdentityScript();
+    return Promise.reject(
+      new DriveAuthError(
+        'popup-blocked',
+        'A biblioteca de autenticação direta do Google ainda está carregando ou foi bloqueada pelo navegador. Aguarde um instante e tente novamente ou abra o app em uma nova aba.'
+      )
     );
   }
 
@@ -200,7 +260,6 @@ async function requestAccessTokenViaGsi(
       const tokenClient = googleObj.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES.join(' '),
-        prompt: forceAccountSelect ? 'select_account' : '',
         callback: async (tokenResponse: any) => {
           if (settled) return;
           settled = true;
@@ -259,7 +318,7 @@ async function requestAccessTokenViaGsi(
             reject(
               new DriveAuthError(
                 'popup-blocked',
-                'O navegador bloqueou a abertura da janela de login do Google. Libere os pop-ups para este site.'
+                'O navegador bloqueou a abertura da janela de login do Google. Libere os pop-ups ou clique em "Abrir em Nova Aba".'
               )
             );
           } else {
@@ -273,7 +332,9 @@ async function requestAccessTokenViaGsi(
         }
       });
 
-      tokenClient.requestAccessToken();
+      tokenClient.requestAccessToken({
+        prompt: forceAccountSelect ? 'select_account' : ''
+      });
     } catch (err: any) {
       if (!settled) {
         settled = true;
@@ -298,7 +359,6 @@ async function requestAccessTokenViaFirebase(
   }
   provider.setCustomParameters(customParams);
 
-  const startedAt = Date.now();
   try {
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -317,21 +377,6 @@ async function requestAccessTokenViaFirebase(
     authSource = 'firebase';
     return { accessToken: cachedAccessToken, account };
   } catch (err: any) {
-    const elapsedMs = Date.now() - startedAt;
-    const rawCode = String(err?.code || '').toLowerCase();
-
-    // If Firebase's authDomain handler popup closed immediately (< 1.5s) due to iframe cookie/storage
-    // partitioning or unauthorized-domain, automatically fall back to Google Identity Services direct OAuth
-    const shouldFallbackToGsi =
-      rawCode === 'auth/unauthorized-domain' ||
-      rawCode === 'auth/operation-not-supported-in-this-environment' ||
-      rawCode === 'auth/internal-error' ||
-      ((rawCode === 'auth/popup-closed-by-user' || rawCode === 'auth/popup-blocked') && elapsedMs < 1500);
-
-    if (shouldFallbackToGsi && typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2?.initTokenClient) {
-      return await requestAccessTokenViaGsi(forceAccountSelect);
-    }
-
     throw toDriveAuthError(err);
   }
 }
@@ -341,7 +386,11 @@ export async function connectGoogleDrive(options?: {
   preferDirectOAuth?: boolean;
 }): Promise<{ accessToken: string; account: ConnectedGoogleAccount }> {
   const forceAccountSelect = options?.forceAccountSelect ?? true;
-  const preferDirectOAuth = options?.preferDirectOAuth ?? false;
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+  const useDirectOAuth =
+    options?.preferDirectOAuth !== undefined
+      ? options.preferDirectOAuth
+      : isIframe && isGsiReady();
 
   if (!forceAccountSelect && cachedAccessToken) {
     return {
@@ -357,7 +406,7 @@ export async function connectGoogleDrive(options?: {
   isSigningIn = true;
   pendingAuthPromise = (async () => {
     try {
-      if (preferDirectOAuth) {
+      if (useDirectOAuth) {
         return await requestAccessTokenViaGsi(forceAccountSelect);
       }
       return await requestAccessTokenViaFirebase(forceAccountSelect);
