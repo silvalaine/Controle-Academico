@@ -148,7 +148,7 @@ export function toDriveAuthError(err: any): DriveAuthError {
       'popup-closed',
       inIframe
         ? 'A janela de login do Google foi fechada antes de concluir a autorização. Como o sistema está aberto dentro do painel incorporado, clique em "Abrir em Nova Aba" para conectar sua conta Google normalmente.'
-        : 'A autorização com o Google não foi concluída. Se o Google exibiu "Acesso bloqueado" para outra conta (ex.: modo de teste), conecte com lab.tecnologia.amparo@gmail.com ou adicione seu e-mail em "Usuários de teste" no Google Cloud. Se a janela fechou após clicar em Permitir, libere cookies de terceiros no cadeado da barra de endereços.'
+        : 'A autorização com o Google não foi concluída. Se o Google exibiu "Acesso bloqueado" para outra conta (ex.: modo de teste), entre com lab.tecnologia.amparo@gmail.com ou adicione o e-mail em "Usuários de teste" no Google Cloud. Se a janela fechou após clicar em Permitir, permita cookies de terceiros no ícone de ajustes (🎛️) à esquerda do endereço.'
     );
   }
   if (code === 'auth/popup-blocked' || msg.includes('auth/popup-blocked')) {

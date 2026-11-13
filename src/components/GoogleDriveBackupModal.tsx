@@ -16,7 +16,9 @@ import {
   Users,
   BookOpen,
   LogOut,
-  FileJson
+  FileJson,
+  FolderOpen,
+  Clipboard
 } from 'lucide-react';
 import { AppDataState } from '../utils/storage';
 import {
@@ -26,6 +28,7 @@ import {
   deleteBackupFromGoogleDrive,
   exportBackupJsonFile,
   importBackupJsonFile,
+  parseBackupJsonText,
   DriveBackupFile
 } from '../utils/googleDrive';
 import {
@@ -110,6 +113,9 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
     fileName: string;
     data: AppDataState;
   } | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [showPasteJson, setShowPasteJson] = useState(false);
+  const [pastedJsonText, setPastedJsonText] = useState('');
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isInsideIframe = typeof window !== 'undefined' && window.self !== window.top;
@@ -170,7 +176,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
           if (redirectRes.status === 'dropped') {
             setStatusMessage({
               type: 'error',
-              text: 'O navegador bloqueou o retorno da sessão após o redirecionamento (cookies de terceiros bloqueados para gen-lang-client-0320529022.firebaseapp.com). Libere os cookies de terceiros no cadeado da barra de endereços ou use os botões .json locais.',
+              text: 'O navegador bloqueou o retorno da sessão após o redirecionamento (cookies de terceiros bloqueados). Clique no ícone de ajustes (à esquerda do endereço https://) ou no ícone de olho cortado (à direita da barra) para permitir cookies de terceiros, ou use os botões .json locais.',
               errorCode: 'popup-blocked'
             });
             return;
@@ -279,11 +285,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
     }
   };
 
-  const handleSelectLocalJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-
+  const handleJsonFileObject = async (file: File) => {
     setStatusMessage(null);
     try {
       const parsed = await importBackupJsonFile(file);
@@ -295,6 +297,58 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
       setStatusMessage({
         type: 'error',
         text: err?.message || 'Não foi possível ler o arquivo de backup selecionado.'
+      });
+    }
+  };
+
+  const handleSelectLocalJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await handleJsonFileObject(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingFile) setIsDraggingFile(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+  };
+
+  const handleDropJsonFile = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await handleJsonFileObject(file);
+  };
+
+  const handleParsePastedJson = () => {
+    const trimmed = pastedJsonText.trim();
+    if (!trimmed) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Cole o conteúdo do arquivo .json antes de carregar.'
+      });
+      return;
+    }
+    setStatusMessage(null);
+    try {
+      const parsed = parseBackupJsonText(trimmed);
+      setConfirmLocalRestore({
+        fileName: 'Backup JSON colado manualmente',
+        data: parsed.data
+      });
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: err?.message || 'O texto colado não é um backup JSON válido do Diário do Professor.'
       });
     }
   };
@@ -436,6 +490,13 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+      <input
+        ref={localFileInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleSelectLocalJsonFile}
+        className="hidden"
+      />
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
         {/* Modal Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-900 to-indigo-950 text-white">
@@ -581,7 +642,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
             }`}
           >
             <Download className="w-4 h-4" />
-            <span>Importar do Google Drive</span>
+            <span>Importar Backup</span>
             {backups.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-700 font-semibold">
                 {backups.length}
@@ -664,6 +725,15 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                     <FileJson className="w-3.5 h-3.5" />
                     <span>Baixar Backup (.json)</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => localFileInputRef.current?.click()}
+                    disabled={isLoading || isLoggingIn}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-2xs transition cursor-pointer"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>Importar Arquivo .json</span>
+                  </button>
                 </div>
 
                 <div className="text-[11px] text-rose-900/90 bg-white/75 border border-rose-200/80 rounded-xl p-2.5 leading-relaxed space-y-1">
@@ -681,7 +751,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                       </a>.
                     </li>
                     <li>
-                      <strong>Cookies bloqueados pelo navegador:</strong> clique no ícone ao lado do endereço do site (cadeado/ajustes) e permita cookies de terceiros para este site.
+                      <strong>Cookies bloqueados pelo navegador:</strong> o Chrome e o Edge substituíram o antigo cadeado por um <strong>ícone de ajustes (duas barrinhas com bolinhas)</strong> à esquerda do endereço <code>https://</code> (ou um <strong>ícone de olho cortado</strong> à direita da barra). Clique nele → <em>Cookies e dados do site</em> (ou <em>Cookies de terceiros</em>) e ative a permissão para este site. Se estiver no painel do AI Studio, abra primeiro em uma aba própria.
                     </li>
                   </ul>
                 </div>
@@ -782,15 +852,128 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Direct Import without OAuth (Top Priority Fallback) */}
+              <div className="rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/90 to-white p-4 sm:p-5 space-y-3.5 shadow-2xs">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileJson className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <h4 className="text-xs font-bold text-emerald-950">
+                        Método Alternativo Rápido: Importar Arquivo (.json) — Sem Login
+                      </h4>
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Funciona Sempre
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-900/80 mt-1 leading-relaxed">
+                      Não conseguiu conectar pelo botão do Google? Baixe o arquivo <code>.json</code> diretamente do seu Google Drive e envie ou arraste aqui embaixo.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 1: Open Drive directly in browser */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white border border-emerald-200/80 rounded-xl p-3">
+                  <div className="text-[11px] text-slate-700 leading-snug">
+                    <strong className="text-slate-900">1. Pegar seu último arquivo no Drive:</strong>{' '}
+                    abra seu Google Drive, localize o arquivo de backup mais recente (ex.: <code>Diario_do_Professor_Backup_...json</code> ou <code>backup_diario_professor...json</code>) e clique em <em>Fazer download</em>.
+                  </div>
+                  <a
+                    href="https://drive.google.com/drive/search?q=Diario_do_Professor_Backup%20OR%20backup_diario_professor"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold text-[11px] transition shrink-0 shadow-2xs"
+                  >
+                    <span>Abrir Google Drive</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+
+                {/* Step 2: Drag-and-drop or Select file */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropJsonFile}
+                  className={`rounded-xl border-2 border-dashed p-4 text-center transition ${
+                    isDraggingFile
+                      ? 'border-emerald-500 bg-emerald-100/70'
+                      : 'border-emerald-300/90 bg-white hover:border-emerald-400'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="text-center sm:text-left">
+                      <p className="text-xs font-bold text-slate-800">
+                        2. {isDraggingFile ? 'Solte o arquivo .json aqui para restaurar' : 'Arraste e solte seu arquivo .json aqui'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Ou clique ao lado para selecionar o backup salvo no computador/celular.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => localFileInputRef.current?.click()}
+                      disabled={isLoading || isLoggingIn}
+                      className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      <span>Selecionar Arquivo .json</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 3: Optional Paste JSON */}
+                <div className="pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasteJson(prev => !prev)}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                  >
+                    <Clipboard className="w-3.5 h-3.5" />
+                    <span>{showPasteJson ? 'Ocultar campo de colar JSON' : 'Ou colar o texto JSON do backup manualmente'}</span>
+                  </button>
+
+                  {showPasteJson && (
+                    <div className="mt-2.5 space-y-2 bg-white border border-emerald-200 rounded-xl p-3">
+                      <textarea
+                        value={pastedJsonText}
+                        onChange={(e) => setPastedJsonText(e.target.value)}
+                        rows={4}
+                        placeholder='Cole aqui o conteúdo completo do arquivo .json (começando com { "academicYears": ... })'
+                        className="w-full rounded-lg border border-slate-200 p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPastedJsonText('');
+                            setShowPasteJson(false);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleParsePastedJson}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Carregar JSON Colado</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Header and Refresh */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-100">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-800">Backups Disponíveis no seu Google Drive</h4>
+                  <h4 className="text-xs font-bold text-slate-800">Conexão Direta com o Google Drive (Automático)</h4>
                   <p className="text-[11px] text-slate-500">
                     {hasDriveToken
                       ? `Exibindo arquivos de ${googleAccount?.email || 'sua conta Google conectada'}`
-                      : 'Conecte sua conta Google para listar e restaurar seus arquivos de backup'}
+                      : 'Conecte sua conta Google para listar e restaurar arquivos automaticamente'}
                   </p>
                 </div>
                 <button
@@ -918,35 +1101,6 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                   })}
                 </div>
               )}
-
-              {/* Local Offline Restore Alternative */}
-              <div className="p-4 rounded-2xl border border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="text-center sm:text-left">
-                  <h5 className="text-xs font-bold text-slate-800 flex items-center justify-center sm:justify-start gap-1.5">
-                    <FileJson className="w-4 h-4 text-indigo-600" />
-                    <span>Importar de Arquivo Local (.json)</span>
-                  </h5>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tem um backup salvo no aparelho ou baixado manualmente do Drive? Carregue-o aqui sem depender de pop-up.
-                  </p>
-                </div>
-                <input
-                  ref={localFileInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleSelectLocalJsonFile}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => localFileInputRef.current?.click()}
-                  disabled={isLoading || isLoggingIn}
-                  className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs transition cursor-pointer"
-                >
-                  <Upload className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Selecionar .json</span>
-                </button>
-              </div>
             </div>
           )}
         </div>
@@ -1070,6 +1224,8 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                 onClick={() => {
                   const target = confirmLocalRestore;
                   setConfirmLocalRestore(null);
+                  setShowPasteJson(false);
+                  setPastedJsonText('');
                   onRestoreData(target.data);
                   setStatusMessage({
                     type: 'success',
