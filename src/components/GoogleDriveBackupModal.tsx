@@ -153,9 +153,9 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
       checkGoogleRedirectResult()
         .then((redirectRes) => {
           if (!active) return;
-          if (redirectRes) {
+          if (redirectRes.status === 'connected' && redirectRes.accessToken) {
             setHasDriveToken(true);
-            setGoogleAccount(redirectRes.account);
+            setGoogleAccount(redirectRes.account || null);
             setStatusMessage({
               type: 'success',
               text: redirectRes.account?.email
@@ -165,6 +165,14 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
             if (activeTab === 'restore') {
               handleLoadBackups();
             }
+            return;
+          }
+          if (redirectRes.status === 'dropped') {
+            setStatusMessage({
+              type: 'error',
+              text: 'O navegador bloqueou o retorno da sessão após o redirecionamento (cookies de terceiros bloqueados para gen-lang-client-0320529022.firebaseapp.com). Libere os cookies de terceiros no cadeado da barra de endereços ou use os botões .json locais.',
+              errorCode: 'popup-blocked'
+            });
             return;
           }
           const token = getGoogleAccessToken();
@@ -610,51 +618,73 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
             </div>
 
             {statusMessage.type === 'error' && (
-              <div className="flex flex-wrap items-center gap-2 pt-1 pl-6">
-                {isInsideIframe && typeof window !== 'undefined' && (
-                  <a
-                    href={newTabDriveUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-2xs transition"
-                    title="Abre o Diário do Professor em uma aba própria para conectar sua conta Google sem restrições de painel"
-                  >
-                    <span>Abrir em Nova Aba</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleConnectGoogle({
-                      forceAccountSelect: true,
-                      loadListAfter: activeTab === 'restore'
-                    })
-                  }
-                  disabled={isLoggingIn || isLoading}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shadow-2xs transition cursor-pointer"
-                >
-                  Tentar Novamente (Google)
-                </button>
-                {!isInsideIframe && (
+              <div className="space-y-2.5 pt-1 pl-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  {isInsideIframe && typeof window !== 'undefined' && (
+                    <a
+                      href={newTabDriveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-2xs transition"
+                      title="Abre o Diário do Professor em uma aba própria para conectar sua conta Google sem restrições de painel"
+                    >
+                      <span>Abrir em Nova Aba</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                   <button
                     type="button"
-                    onClick={handleConnectViaRedirect}
+                    onClick={() =>
+                      handleConnectGoogle({
+                        forceAccountSelect: true,
+                        loadListAfter: activeTab === 'restore'
+                      })
+                    }
                     disabled={isLoggingIn || isLoading}
-                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100/70 text-rose-900 border border-rose-300 font-bold text-[11px] transition cursor-pointer"
-                    title="Conecta na mesma aba sem abrir pop-up"
+                    className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shadow-2xs transition cursor-pointer"
                   >
-                    Conectar sem Pop-up (Redirecionar)
+                    Tentar Novamente (Google)
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleLocalJsonDownload}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition cursor-pointer"
-                >
-                  <FileJson className="w-3.5 h-3.5" />
-                  <span>Baixar Backup (.json)</span>
-                </button>
+                  {!isInsideIframe && (
+                    <button
+                      type="button"
+                      onClick={handleConnectViaRedirect}
+                      disabled={isLoggingIn || isLoading}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100/70 text-rose-900 border border-rose-300 font-bold text-[11px] transition cursor-pointer"
+                      title="Conecta na mesma aba sem abrir pop-up"
+                    >
+                      Conectar sem Pop-up (Redirecionar)
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleLocalJsonDownload}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition cursor-pointer"
+                  >
+                    <FileJson className="w-3.5 h-3.5" />
+                    <span>Baixar Backup (.json)</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-rose-900/90 bg-white/75 border border-rose-200/80 rounded-xl p-2.5 leading-relaxed space-y-1">
+                  <p className="font-bold">Como resolver se o Google estiver bloqueando:</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>
+                      <strong>App em modo de teste:</strong> se apareceu <em>"Acesso bloqueado"</em> ao usar outro Gmail (ex.: <code>laynesylva@gmail.com</code>), entre com <strong>lab.tecnologia.amparo@gmail.com</strong> ou adicione o e-mail desejado em{' '}
+                      <a
+                        href="https://console.cloud.google.com/apis/credentials/consent?project=gen-lang-client-0320529022"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline font-semibold text-indigo-700 hover:text-indigo-900"
+                      >
+                        Usuários de teste no Google Cloud
+                      </a>.
+                    </li>
+                    <li>
+                      <strong>Cookies bloqueados pelo navegador:</strong> clique no ícone ao lado do endereço do site (cadeado/ajustes) e permita cookies de terceiros para este site.
+                    </li>
+                  </ul>
+                </div>
               </div>
             )}
           </div>

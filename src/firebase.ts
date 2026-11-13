@@ -148,7 +148,7 @@ export function toDriveAuthError(err: any): DriveAuthError {
       'popup-closed',
       inIframe
         ? 'A janela de login do Google foi fechada antes de concluir a autorização. Como o sistema está aberto dentro do painel incorporado, clique em "Abrir em Nova Aba" para conectar sua conta Google normalmente.'
-        : 'A janela de login do Google foi fechada antes de concluir a autorização. Tente novamente ou use "Conectar sem Pop-up (Redirecionar)".'
+        : 'A autorização com o Google não foi concluída. Se o Google exibiu "Acesso bloqueado" para outra conta (ex.: modo de teste), conecte com lab.tecnologia.amparo@gmail.com ou adicione seu e-mail em "Usuários de teste" no Google Cloud. Se a janela fechou após clicar em Permitir, libere cookies de terceiros no cadeado da barra de endereços.'
     );
   }
   if (code === 'auth/popup-blocked' || msg.includes('auth/popup-blocked')) {
@@ -238,19 +238,28 @@ export async function connectGoogleDriveViaRedirect(forceAccountSelect: boolean 
   await signInWithRedirect(auth, provider);
 }
 
-export async function checkGoogleRedirectResult(): Promise<{ accessToken: string; account: ConnectedGoogleAccount } | null> {
+export async function checkGoogleRedirectResult(): Promise<{
+  status: 'connected' | 'none' | 'dropped';
+  accessToken?: string;
+  account?: ConnectedGoogleAccount;
+}> {
+  const hasFlag =
+    typeof window !== 'undefined' && sessionStorage.getItem('diario_pending_drive_redirect') === '1';
   try {
-    const hasFlag = typeof window !== 'undefined' && sessionStorage.getItem('diario_pending_drive_redirect') === '1';
     const result = await getRedirectResult(auth);
     if (hasFlag) {
       try {
         sessionStorage.removeItem('diario_pending_drive_redirect');
       } catch (_) {}
     }
-    if (!result) return null;
+    if (!result) {
+      return { status: hasFlag ? 'dropped' : 'none' };
+    }
 
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) return null;
+    if (!credential?.accessToken) {
+      return { status: hasFlag ? 'dropped' : 'none' };
+    }
 
     const account: ConnectedGoogleAccount = {
       email: result.user.email || undefined,
@@ -260,7 +269,7 @@ export async function checkGoogleRedirectResult(): Promise<{ accessToken: string
     cachedAccessToken = credential.accessToken;
     cachedGoogleAccount = account;
     authSource = 'firebase';
-    return { accessToken: cachedAccessToken, account };
+    return { status: 'connected', accessToken: cachedAccessToken, account };
   } catch (err: any) {
     try {
       sessionStorage.removeItem('diario_pending_drive_redirect');
