@@ -14,7 +14,10 @@ import {
   ExternalLink,
   Link as LinkIcon,
   Filter,
-  AlertCircle
+  AlertCircle,
+  Users,
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { ClassRoom, LessonContent, LessonStatus } from '../types';
 import {
@@ -35,22 +38,26 @@ import {
 
 interface LessonDiaryProps {
   currentClass: ClassRoom;
+  classes?: ClassRoom[];
   lessons: LessonContent[];
   selectedTerm: number;
   onAddLesson: (newLesson: Omit<LessonContent, 'id'>) => void;
   onUpdateLesson: (lesson: LessonContent) => void;
   onDeleteLesson: (lessonId: string) => void;
   onSelectTerm?: (term: number) => void;
+  onSelectClass?: (classId: string) => void;
 }
 
 export const LessonDiary: React.FC<LessonDiaryProps> = ({
   currentClass,
+  classes,
   lessons,
   selectedTerm,
   onAddLesson,
   onUpdateLesson,
   onDeleteLesson,
-  onSelectTerm
+  onSelectTerm,
+  onSelectClass
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTermOnly, setFilterTermOnly] = useState(true);
@@ -58,6 +65,15 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonToDelete, setLessonToDelete] = useState<LessonContent | null>(null);
+  const [modalClassId, setModalClassId] = useState<string>(currentClass.id);
+  const [keepFieldsOnSave, setKeepFieldsOnSave] = useState<boolean>(true);
+  const [saveFeedback, setSaveFeedback] = useState<{
+    className: string;
+    termLabel: string;
+    count: number;
+    mode: 'create' | 'update';
+  } | null>(null);
+  const [savedClassesInSession, setSavedClassesInSession] = useState<string[]>([]);
 
   // Form State
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -99,8 +115,14 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
     .filter(l => l.status === 'previsto')
     .reduce((acc, curr) => acc + (Number(curr.lessonCount) || 1), 0);
 
+  const availableClasses = classes && classes.length > 0 ? classes : [currentClass];
+  const modalClass = availableClasses.find(c => c.id === modalClassId) || currentClass;
+
   const handleOpenAdd = () => {
     setEditingLessonId(null);
+    setModalClassId(currentClass.id);
+    setSaveFeedback(null);
+    setSavedClassesInSession([]);
     setDate(new Date().toISOString().split('T')[0]);
     setLessonCount(2);
     setTopic('');
@@ -115,6 +137,9 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
 
   const handleOpenEdit = (lesson: LessonContent) => {
     setEditingLessonId(lesson.id);
+    setModalClassId(lesson.classId || currentClass.id);
+    setSaveFeedback(null);
+    setSavedClassesInSession([]);
     setDate(lesson.date);
     setLessonCount(lesson.lessonCount);
     setTopic(lesson.topic);
@@ -127,6 +152,17 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
     setIsModalOpen(true);
   };
 
+  const handleResetFormForNew = () => {
+    setEditingLessonId(null);
+    setTopic('');
+    setContentDescription('');
+    setBnccSkills('');
+    setHomework('');
+    setExternalLink('');
+    setExternalLinkTitle('');
+    setSaveFeedback(null);
+  };
+
   const handleToggleStatus = (lesson: LessonContent) => {
     const nextStatus: LessonStatus = lesson.status === 'previsto' ? 'dado' : 'previsto';
     onUpdateLesson({
@@ -135,8 +171,8 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
     });
   };
 
-  // Detect term corresponding to the date entered in the form
-  const dateValidation = validateDateInTerm(date, selectedTerm, currentClass);
+  // Detect term corresponding to the date entered in the form using the selected modal class
+  const dateValidation = validateDateInTerm(date, selectedTerm, modalClass);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,11 +184,13 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
     }
 
     const termToSave = dateValidation.detectedTerm;
+    const targetClassId = modalClass.id;
+    const isEditMode = Boolean(editingLessonId);
 
     if (editingLessonId) {
       onUpdateLesson({
         id: editingLessonId,
-        classId: currentClass.id,
+        classId: targetClassId,
         date,
         term: termToSave,
         lessonCount: Number(lessonCount) || 1,
@@ -166,7 +204,7 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
       });
     } else {
       onAddLesson({
-        classId: currentClass.id,
+        classId: targetClassId,
         date,
         term: termToSave,
         lessonCount: Number(lessonCount) || 1,
@@ -180,12 +218,33 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
       });
     }
 
+    if (targetClassId !== currentClass.id && onSelectClass) {
+      onSelectClass(targetClassId);
+    }
+
     // If lesson was registered into another term (e.g. October -> 4º Bimestre), auto-switch term view
     if (termToSave !== selectedTerm && onSelectTerm) {
       onSelectTerm(termToSave);
     }
 
-    setIsModalOpen(false);
+    setSavedClassesInSession(prev =>
+      prev.includes(modalClass.name) ? prev : [...prev, modalClass.name]
+    );
+    setSaveFeedback(prev => ({
+      className: modalClass.name,
+      termLabel: dateValidation.detectedTermLabel,
+      count: (prev?.count || 0) + 1,
+      mode: isEditMode ? 'update' : 'create'
+    }));
+
+    if (!isEditMode && !keepFieldsOnSave) {
+      setTopic('');
+      setContentDescription('');
+      setBnccSkills('');
+      setHomework('');
+      setExternalLink('');
+      setExternalLinkTitle('');
+    }
   };
 
   const [includeLogo, setIncludeLogo] = useState<boolean>(() => getIncludeSchoolLogoPreference());
@@ -477,14 +536,63 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-bold text-slate-900 mb-1">
-              {editingLessonId ? 'Editar Registro de Aula' : 'Novo Registro de Aula Ministrada'}
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              {currentClass.name} • {getTermLabel(currentClass.termType, selectedTerm)}
-            </p>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-0.5">
+                  {editingLessonId ? 'Editar Registro de Aula' : 'Novo Registro de Aula Ministrada'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {modalClass.name} • {dateValidation.detectedTermLabel}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                title="Fechar janela"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Seletor de Turma dentro da janela */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Turma do Registro *</span>
+                  </label>
+                  {availableClasses.length > 1 && (
+                    <span className="text-[11px] text-slate-500">
+                      Troque de turma sem fechar
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={modalClass.id}
+                  onChange={(e) => {
+                    const nextClassId = e.target.value;
+                    setModalClassId(nextClassId);
+                  }}
+                  className="w-full px-3 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  {availableClasses.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}{cls.subject ? ` — ${cls.subject}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {savedClassesInSession.length > 0 && (
+                  <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>
+                      Salvo nesta janela em: <strong>{savedClassesInSession.join(', ')}</strong>
+                    </span>
+                  </p>
+                )}
+              </div>
+
               {/* Opção Previsto ou Dado */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
@@ -666,20 +774,70 @@ export const LessonDiary: React.FC<LessonDiaryProps> = ({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              {!editingLessonId && (
+                <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none pt-1">
+                  <input
+                    type="checkbox"
+                    checked={keepFieldsOnSave}
+                    onChange={(e) => setKeepFieldsOnSave(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Manter campos preenchidos ao salvar (facilita lançar em outra turma)</span>
+                </label>
+              )}
+
+              {saveFeedback && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">
+                        {saveFeedback.mode === 'update'
+                          ? `Alterações salvas em ${saveFeedback.className} (${saveFeedback.termLabel})!`
+                          : `Aula registrada em ${saveFeedback.className} (${saveFeedback.termLabel})!`}
+                      </p>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">
+                        Você continua na mesma janela: troque a turma acima para replicar, clique em &ldquo;Limpar Campos&rdquo; para uma nova aula ou em &ldquo;Fechar&rdquo;.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSaveFeedback(null)}
+                    className="text-emerald-600 hover:text-emerald-900 p-0.5 cursor-pointer"
+                    title="Ocultar aviso"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs text-slate-600 hover:text-slate-800 font-semibold rounded-lg"
+                  onClick={handleResetFormForNew}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold rounded-lg transition cursor-pointer"
+                  title="Limpar texto para lançar uma nova aula"
                 >
-                  Cancelar
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{editingLessonId ? 'Novo Registro (Limpar)' : 'Limpar Campos'}</span>
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-lg shadow-xs"
-                >
-                  Salvar Registro
-                </button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-xs text-slate-600 hover:text-slate-800 hover:bg-slate-100 font-semibold rounded-lg transition cursor-pointer"
+                  >
+                    {saveFeedback ? 'Fechar' : 'Cancelar'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-xs text-white bg-indigo-600 hover:bg-indigo-700 font-bold rounded-lg shadow-xs transition cursor-pointer"
+                  >
+                    {editingLessonId ? 'Salvar Alterações' : 'Salvar Registro'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

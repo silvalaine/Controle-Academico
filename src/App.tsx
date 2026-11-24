@@ -458,7 +458,7 @@ export default function App() {
 
   // --- Lesson Diary Handlers ---
   const handleAddLesson = (newLesson: Omit<LessonContent, 'id'>) => {
-    const id = `les-${Date.now()}`;
+    const id = `les-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setData(prev => ({
       ...prev,
       lessons: [...prev.lessons, { ...newLesson, id }]
@@ -1119,12 +1119,14 @@ export default function App() {
             {activeTab === 'lessons' && (
               <LessonDiary
                 currentClass={currentClass}
+                classes={yearClasses}
                 lessons={data.lessons}
                 selectedTerm={data.selectedTerm}
                 onAddLesson={handleAddLesson}
                 onUpdateLesson={handleUpdateLesson}
                 onDeleteLesson={handleDeleteLesson}
                 onSelectTerm={handleSelectTerm}
+                onSelectClass={handleSelectClass}
               />
             )}
 
